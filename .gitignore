@@ -1,0 +1,49 @@
+# Secrets — NEVER commit
+.env
+.env.*
+!.env.example
+*.env
+crdg-secrets.env
+secrets/
+*.pem
+*.key
+
+# Node
+node_modules/
+.pnpm-store/
+.turbo/
+dist/
+build/
+.next/
+coverage/
+*.tsbuildinfo
+
+# Python (if any)
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Playwright
+playwright-report/
+test-results/
+.playwright/
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Logs / runtime
+logs/
+*.log
+tmp/
+.cache/
+
+# Local Supabase
+supabase/.branches/
+supabase/.temp/
+
+# Fly
+.fly/
