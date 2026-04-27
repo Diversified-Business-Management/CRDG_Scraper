@@ -173,10 +173,16 @@ export async function dedupe(
   const text = buildEmbeddingText(normalized);
   const text_hash = createHash('sha256').update(text).digest('hex');
   const { vector, provider } = await embed(text);
+
+  // Without semantic embeddings (Voyage / OpenAI), we can't trust the AI
+  // judge to dedupe correctly — the hash-pseudo-embedding will pull random
+  // candidates that the AI tends to optimistically merge. Always create.
   if (provider === 'hash-dev') {
-    logger.warn(
-      'dedupe.using_hash_pseudo_embedding (set VOYAGE_API_KEY for production)',
-    );
+    logger.warn('dedupe.skipped_hash_embedding (set VOYAGE_API_KEY to enable real dedup)');
+    return {
+      result: { action: 'create', confidence: 0, method: 'no_match', text_hash, embedding: vector },
+      costUsd: 0,
+    };
   }
 
   const find = opts.findCandidates ?? defaultFindCandidates;
