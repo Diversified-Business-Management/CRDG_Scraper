@@ -13,7 +13,7 @@ Open these in order:
 
 ## What works today, with no further setup
 
-- **Supabase foundation** — schema applied, 14 tables + 3 views, pgvector, RLS for realtor / admin / anon roles. ~30 canonical listings ingested with photos.
+- **Supabase foundation** — schema applied, 14 tables + 3 views, pgvector, RLS for realtor / admin / anon roles. 47 canonical listings ingested (more arriving from a second pass running now) with photos.
 - **Realtor /listings** — search, filter (region / type / price / beds / baths / features), pagination, listing detail.
 - **Admin** — sources table with cron + rate-limit + run-now, runs history, dedup queue, AI cost charts.
 - **Worker** — orchestrator that runs adapters → AI pipeline → publish, with a file-based "Run now" trigger from the dashboard.
