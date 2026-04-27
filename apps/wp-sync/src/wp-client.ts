@@ -61,15 +61,20 @@ export const wp = {
   },
 
   async getProperty(id: number) {
-    return wpRequest<Record<string, unknown>>(`/wp/v2/property/${id}?context=edit`);
+    return wpRequest<Record<string, unknown>>(`/wp/v2/properties/${id}?context=edit`);
+  },
+
+  /** PUT-style update via REST */
+  async updatePropertyMeta(id: number, meta: Record<string, unknown>) {
+    return wpRequest<{ id: number }>(`/wp/v2/properties/${id}`, { method: 'POST', body: { meta } });
   },
 
   async createProperty(data: Record<string, unknown>) {
-    return wpRequest<{ id: number; link: string }>(`/wp/v2/property`, { method: 'POST', body: data });
+    return wpRequest<{ id: number; link: string }>(`/wp/v2/properties`, { method: 'POST', body: data });
   },
 
   async updateProperty(id: number, data: Record<string, unknown>) {
-    return wpRequest<{ id: number; link: string }>(`/wp/v2/property/${id}`, { method: 'POST', body: data });
+    return wpRequest<{ id: number; link: string }>(`/wp/v2/properties/${id}`, { method: 'POST', body: data });
   },
 
   async upsertTerm(taxonomy: string, name: string, slug?: string): Promise<{ id: number }> {

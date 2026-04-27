@@ -85,14 +85,14 @@ const LOCALITY_TO_REGION: Record<string, RegionSlug> = {
 const REGION_BOXES: Array<{ region: RegionSlug; minLat: number; maxLat: number; minLng: number; maxLng: number }> = [
   // Caribbean: east coast strip
   { region: 'caribbean', minLat: 9.4, maxLat: 11.0, minLng: -83.7, maxLng: -82.5 },
-  // South Pacific: Dominical to Osa peninsula
+  // South Pacific: Dominical south through Osa peninsula
   { region: 'south-pacific', minLat: 8.3, maxLat: 9.4, minLng: -84.0, maxLng: -82.7 },
-  // Central Pacific: Jaco -> Manuel Antonio -> Quepos
+  // Central Pacific: Jaco -> Manuel Antonio -> Quepos (eastern Pacific coast)
   { region: 'central-pacific', minLat: 9.3, maxLat: 9.85, minLng: -84.85, maxLng: -84.0 },
-  // Nicoya peninsula southern half
-  { region: 'nicoya', minLat: 9.55, maxLat: 10.4, minLng: -85.85, maxLng: -85.0 },
-  // Guanacaste: NW Pacific
-  { region: 'guanacaste', minLat: 10.0, maxLat: 11.2, minLng: -86.0, maxLng: -85.0 },
+  // Guanacaste: NW Pacific incl. Tamarindo + Liberia. Higher latitude / west coast.
+  { region: 'guanacaste', minLat: 10.15, maxLat: 11.2, minLng: -86.0, maxLng: -85.0 },
+  // Nicoya peninsula southern half (Nosara, Samara, Santa Teresa, Montezuma)
+  { region: 'nicoya', minLat: 9.55, maxLat: 10.15, minLng: -85.85, maxLng: -84.95 },
   // Central Valley: catch-all interior
   { region: 'central-valley', minLat: 9.7, maxLat: 10.3, minLng: -84.5, maxLng: -83.7 },
 ];
