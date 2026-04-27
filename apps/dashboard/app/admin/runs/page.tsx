@@ -1,12 +1,12 @@
 import Link from 'next/link';
 import { format } from 'date-fns';
-import { createServerSupabase } from '@/lib/supabase/server';
+import { createAdminSupabase } from "@/lib/supabase/admin";
 import { Badge } from '@/components/ui/Badge';
 import { cn, formatUsd, statusColor } from '@/lib/utils';
 import type { RecentRunRow } from '@/lib/types';
 
 export default async function RunsPage() {
-  const supabase = await createServerSupabase();
+  const supabase = createAdminSupabase();
   const { data, error } = await supabase
     .from('v_recent_runs')
     .select('*')

@@ -1,5 +1,5 @@
 import { format } from 'date-fns';
-import { createServerSupabase } from '@/lib/supabase/server';
+import { createAdminSupabase } from "@/lib/supabase/admin";
 import { SourceRowActions } from './SourceRowActions';
 import { Badge } from '@/components/ui/Badge';
 
@@ -22,7 +22,7 @@ interface JoinedSource {
 }
 
 export default async function SourcesPage() {
-  const supabase = await createServerSupabase();
+  const supabase = createAdminSupabase();
   const { data, error } = await supabase
     .from('sources')
     .select('id, slug, name, enabled, notes, source_configs(id, cron_expression, rate_limit_rps, burst, max_listings_per_run, regions, enabled, last_run_at)')

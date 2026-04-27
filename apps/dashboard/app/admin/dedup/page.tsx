@@ -1,10 +1,10 @@
 import { format } from 'date-fns';
-import { createServerSupabase } from '@/lib/supabase/server';
+import { createAdminSupabase } from "@/lib/supabase/admin";
 import { DedupRow } from './DedupRow';
 import type { DedupLinkRow } from '@/lib/types';
 
 export default async function DedupPage() {
-  const supabase = await createServerSupabase();
+  const supabase = createAdminSupabase();
 
   const { data, error } = await supabase
     .from('dedup_links')

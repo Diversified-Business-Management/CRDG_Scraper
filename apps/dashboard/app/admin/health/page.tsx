@@ -1,11 +1,11 @@
 import { format, subDays } from 'date-fns';
-import { createServerSupabase } from '@/lib/supabase/server';
+import { createAdminSupabase } from "@/lib/supabase/admin";
 import { CostChart, FunnelChart } from './HealthCharts';
 import type { AiCostDailyRow, AlertRow, PipelineFunnelRow } from '@/lib/types';
 import { Badge } from '@/components/ui/Badge';
 
 export default async function HealthPage() {
-  const supabase = await createServerSupabase();
+  const supabase = createAdminSupabase();
   const since = format(subDays(new Date(), 30), 'yyyy-MM-dd');
 
   const [costsRes, funnelRes, alertsRes] = await Promise.all([

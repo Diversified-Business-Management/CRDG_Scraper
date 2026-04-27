@@ -1,12 +1,12 @@
 import { format, startOfWeek } from 'date-fns';
-import { createServerSupabase } from '@/lib/supabase/server';
+import { createAdminSupabase } from "@/lib/supabase/admin";
 import { KpiTile } from '@/components/KpiTile';
 import { formatUsd } from '@/lib/utils';
 import type { AiCostDailyRow, RecentRunRow } from '@/lib/types';
 import { Badge } from '@/components/ui/Badge';
 
 export default async function AdminHome() {
-  const supabase = await createServerSupabase();
+  const supabase = createAdminSupabase();
 
   const [activeListings, totalListings, recentRuns, aiCosts, dedupPending, unsynced] =
     await Promise.all([

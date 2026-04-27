@@ -1,7 +1,7 @@
 import { format } from 'date-fns';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
-import { createServerSupabase } from '@/lib/supabase/server';
+import { createAdminSupabase } from "@/lib/supabase/admin";
 import { cn, formatUsd, statusColor } from '@/lib/utils';
 import type { RecentRunRow, RunLogRow } from '@/lib/types';
 
@@ -13,7 +13,7 @@ export default async function RunDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const supabase = await createServerSupabase();
+  const supabase = createAdminSupabase();
 
   const [{ data: runData }, { data: logsData }] = await Promise.all([
     supabase.from('v_recent_runs').select('*').eq('id', id).maybeSingle(),
