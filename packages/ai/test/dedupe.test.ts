@@ -104,31 +104,31 @@ describe('dedupe()', () => {
     expect(costUsd).toBe(0);
   });
 
-  it("returns 'merge' when judge confidence >= 0.85", async () => {
+  it("returns 'merge' when judge confidence >= MERGE_THRESHOLD (0.99)", async () => {
     const { result, costUsd } = await dedupe(sample, {
-      findCandidates: async () => [{ canonical_listing_id: 'canon-1', similarity: 0.92 }],
+      findCandidates: async () => [{ canonical_listing_id: 'canon-1', similarity: 0.999 }],
       fetchCanonical: async () => ({ id: 'canon-1', title_en: 'Modern Condo Tamarindo' }),
-      judge: async () => ({ match: true, confidence: 0.91, reason: 'same address', costUsd: 0.001 }),
+      judge: async () => ({ match: true, confidence: 0.995, reason: 'same address', costUsd: 0.001 }),
     });
     expect(result.action).toBe('merge');
     expect(result.canonical_listing_id).toBe('canon-1');
-    expect(result.confidence).toBeCloseTo(0.91, 5);
+    expect(result.confidence).toBeCloseTo(0.995, 5);
     expect(result.method).toBe('embedding');
     expect(costUsd).toBeCloseTo(0.001, 5);
   });
 
-  it("returns 'review' when judge confidence in [0.6, 0.85)", async () => {
+  it("returns 'review' when judge confidence in [REVIEW_THRESHOLD, MERGE_THRESHOLD)", async () => {
     const { result } = await dedupe(sample, {
-      findCandidates: async () => [{ canonical_listing_id: 'canon-2', similarity: 0.7 }],
+      findCandidates: async () => [{ canonical_listing_id: 'canon-2', similarity: 0.97 }],
       fetchCanonical: async () => ({ id: 'canon-2', title_en: 'Tamarindo Condo' }),
-      judge: async () => ({ match: false, confidence: 0.72, reason: 'similar but not certain', costUsd: 0.001 }),
+      judge: async () => ({ match: false, confidence: 0.97, reason: 'similar but not certain', costUsd: 0.001 }),
     });
     expect(result.action).toBe('review');
     expect(result.canonical_listing_id).toBe('canon-2');
-    expect(result.confidence).toBeCloseTo(0.72, 5);
+    expect(result.confidence).toBeCloseTo(0.97, 5);
   });
 
-  it("returns 'create' when best confidence < 0.6", async () => {
+  it("returns 'create' when best confidence < REVIEW_THRESHOLD", async () => {
     const { result } = await dedupe(sample, {
       findCandidates: async () => [{ canonical_listing_id: 'canon-3', similarity: 0.4 }],
       fetchCanonical: async () => ({ id: 'canon-3', title_en: 'Different Place' }),
@@ -142,7 +142,7 @@ describe('dedupe()', () => {
     let i = 0;
     const judgments = [
       { match: false, confidence: 0.3, reason: 'a', costUsd: 0.001 },
-      { match: true, confidence: 0.88, reason: 'b', costUsd: 0.001 },
+      { match: true, confidence: 0.998, reason: 'b', costUsd: 0.001 },
       { match: false, confidence: 0.5, reason: 'c', costUsd: 0.001 },
     ];
     const { result, costUsd } = await dedupe(sample, {
@@ -156,7 +156,7 @@ describe('dedupe()', () => {
     });
     expect(result.action).toBe('merge');
     expect(result.canonical_listing_id).toBe('b');
-    // The function short-circuits at the first >= 0.85 hit, so only 2 calls
+    // The function short-circuits at the first >= MERGE_THRESHOLD hit, so only 2 calls
     expect(costUsd).toBeCloseTo(0.002, 5);
   });
 });

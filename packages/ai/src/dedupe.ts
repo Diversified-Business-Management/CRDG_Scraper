@@ -177,7 +177,10 @@ export async function dedupe(
   // Without semantic embeddings (Voyage / OpenAI), we can't trust the AI
   // judge to dedupe correctly — the hash-pseudo-embedding will pull random
   // candidates that the AI tends to optimistically merge. Always create.
-  if (provider === 'hash-dev') {
+  // Tests that inject findCandidates explicitly want to exercise the merge
+  // path, so we only short-circuit in production (no overrides).
+  const isProduction = !opts.findCandidates && !opts.judge;
+  if (provider === 'hash-dev' && isProduction) {
     logger.warn('dedupe.skipped_hash_embedding (set VOYAGE_API_KEY to enable real dedup)');
     return {
       result: { action: 'create', confidence: 0, method: 'no_match', text_hash, embedding: vector },
