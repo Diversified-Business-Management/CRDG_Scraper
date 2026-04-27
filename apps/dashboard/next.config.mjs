@@ -16,6 +16,7 @@ const nextConfig = {
       { protocol: 'https', hostname: 's3.amazonaws.com' },
       { protocol: 'https', hostname: '**.cloudfront.net' },
       { protocol: 'https', hostname: '**.googleusercontent.com' },
+      { protocol: 'https', hostname: 'img.youtube.com' },
     ],
   },
   experimental: {
