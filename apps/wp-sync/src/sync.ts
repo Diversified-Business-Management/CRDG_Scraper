@@ -47,13 +47,15 @@ async function syncOne(row: CanonicalRow): Promise<{ action: 'create' | 'update'
 
   const payload = mapToHouzez(row);
 
-  // Resolve taxonomies first
+  // Resolve taxonomies first (skip in dry-run; ensureTerm calls real WP)
   const tagIds: Record<string, number[]> = {};
-  for (const [taxonomy, names] of Object.entries(payload.taxonomies)) {
-    tagIds[taxonomy] = [];
-    for (const n of names) {
-      try { tagIds[taxonomy]!.push(await ensureTerm(taxonomy, n)); } catch (e) {
-        logger.warn({ taxonomy, name: n, err: (e as Error).message }, 'wp.term.failed');
+  if (!env.wp.dryRun) {
+    for (const [taxonomy, names] of Object.entries(payload.taxonomies)) {
+      tagIds[taxonomy] = [];
+      for (const n of names) {
+        try { tagIds[taxonomy]!.push(await ensureTerm(taxonomy, n)); } catch (e) {
+          logger.warn({ taxonomy, name: n, err: (e as Error).message }, 'wp.term.failed');
+        }
       }
     }
   }
@@ -152,12 +154,16 @@ async function syncOne(row: CanonicalRow): Promise<{ action: 'create' | 'update'
 }
 
 export async function syncPending(opts: { limit?: number } = {}): Promise<{ ok: number; skipped: number; failed: number }> {
-  const ping = await wp.ping();
-  if (!ping.ok) {
-    logger.error({ err: ping.error, baseUrl: env.wp.baseUrl, user: env.wp.username }, 'wp.ping.failed');
-    throw new Error(`WordPress unreachable or auth failed: ${ping.error}`);
+  if (env.wp.dryRun) {
+    logger.info({ baseUrl: env.wp.baseUrl, user: env.wp.username }, 'wp.dry_run.skip_ping');
+  } else {
+    const ping = await wp.ping();
+    if (!ping.ok) {
+      logger.error({ err: ping.error, baseUrl: env.wp.baseUrl, user: env.wp.username }, 'wp.ping.failed');
+      throw new Error(`WordPress unreachable or auth failed: ${ping.error}`);
+    }
+    logger.info({ user: ping.user, baseUrl: env.wp.baseUrl }, 'wp.ping.ok');
   }
-  logger.info({ user: ping.user, baseUrl: env.wp.baseUrl, dryRun: env.wp.dryRun }, 'wp.ping.ok');
 
   const rows = await pgQuery<CanonicalRow>(`
     select * from canonical_listings

@@ -1,14 +1,29 @@
 import { config as loadDotenv } from 'dotenv';
 import { existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 import { homedir } from 'node:os';
 
-const candidates = [
-  join(process.cwd(), '.env'),
-  join(homedir(), 'crdg-secrets.env'),
-];
+/** Walk up from cwd looking for a .env until we hit / or 6 levels. */
+function findRepoRootEnv(): string | null {
+  let dir = process.cwd();
+  for (let i = 0; i < 6; i++) {
+    const p = join(dir, '.env');
+    if (existsSync(p)) return p;
+    const next = dirname(dir);
+    if (next === dir) break;
+    dir = next;
+  }
+  return null;
+}
+
+const candidates: string[] = [];
+const found = findRepoRootEnv();
+if (found) candidates.push(found);
+const homeSecrets = join(homedir(), 'crdg-secrets.env');
+if (existsSync(homeSecrets)) candidates.push(homeSecrets);
+
 for (const path of candidates) {
-  if (existsSync(path)) loadDotenv({ path });
+  loadDotenv({ path });
 }
 
 function required(name: string): string {
