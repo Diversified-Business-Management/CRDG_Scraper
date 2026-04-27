@@ -22,7 +22,16 @@ import {
 
 const SEARCH_BASE = 'https://www.encuentra24.com';
 
-/** Encuentra24 indexes by province; we expose a CRDG-region → province map. */
+/** Encuentra24 organizes by category, with province as a search filter. */
+const CATEGORIES = [
+  'real-estate-for-sale-houses-homes',
+  'real-estate-for-sale-apartments-condos',
+  'real-estate-for-sale-beachfront-homes-and-lots',
+  'real-estate-for-sale-farms',
+  'real-estate-for-sale-commercial',
+  'real-estate-for-sale-buildings',
+] as const;
+
 const REGION_TO_PROVINCES: Record<RegionSlug, string[]> = {
   'central-pacific': ['puntarenas'],
   'guanacaste': ['guanacaste'],
@@ -32,10 +41,12 @@ const REGION_TO_PROVINCES: Record<RegionSlug, string[]> = {
   'south-pacific': ['puntarenas'],
 };
 
-function searchUrlForProvince(province: string, page: number): string {
-  const path = `/costa-rica-en/real-estate-for-sale-in-${province}`;
+/** Encuentra24's province filter param appears as `q[province]` in some URLs;
+ * province-aware filtering doesn't reliably narrow the listing set, so we
+ * walk all categories and filter regions downstream via geocoding. */
+function searchUrlForCategory(category: string, page: number): string {
   const qs = page > 1 ? `?p=${page}` : '';
-  return `${SEARCH_BASE}${path}${qs}`;
+  return `${SEARCH_BASE}/costa-rica-en/${category}${qs}`;
 }
 
 // Encuentra24 detail URLs: /costa-rica-en/real-estate-for-sale-{category}/{slug}/{id}
@@ -65,28 +76,21 @@ function parseListingHrefs(html: string, base: string): string[] {
   return [...urls];
 }
 
-function provincesForOpts(regions?: RegionSlug[]): string[] {
-  if (!regions || regions.length === 0) {
-    return ['guanacaste', 'puntarenas', 'san-jose', 'heredia', 'alajuela', 'cartago', 'limon'];
-  }
-  const set = new Set<string>();
-  for (const r of regions) for (const p of REGION_TO_PROVINCES[r] ?? []) set.add(p);
-  return [...set];
-}
+// silence unused-warning while we keep REGION_TO_PROVINCES for future use
+void REGION_TO_PROVINCES;
 
 async function* enumerateListingUrls(opts: EnumerateOpts): AsyncIterable<string> {
-  const provinces = provincesForOpts(opts.regions);
   const seen = new Set<string>();
   let yielded = 0;
   const max = opts.maxListings ?? Number.POSITIVE_INFINITY;
 
-  for (const province of provinces) {
+  for (const category of CATEGORIES) {
     let page = 1;
     let emptyStreak = 0;
     while (page <= 50 && emptyStreak < 2) {
       if (opts.signal?.aborted) return;
       if (yielded >= max) return;
-      const url = searchUrlForProvince(province, page);
+      const url = searchUrlForCategory(category, page);
       let html: string;
       try {
         const res = await fetchHtml(url, { signal: opts.signal });

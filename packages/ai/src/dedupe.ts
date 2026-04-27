@@ -12,8 +12,13 @@ const MODEL = 'claude-haiku-4-5-20251001' as const;
 
 /** Fixed embedding dim for both Voyage 'voyage-2' and our hash fallback. */
 const EMBEDDING_DIM = 1024;
-const MERGE_THRESHOLD = 0.85;
-const REVIEW_THRESHOLD = 0.6;
+// Without semantic embeddings (Voyage / OpenAI), dedupe is dangerous — the
+// hash-pseudo-embedding will collide on similar boilerplate. Until production
+// embeddings are wired up, raise both thresholds so the pipeline almost always
+// creates a new canonical and never silently merges. The Haiku judge can still
+// flag review-queue cases when source IDs match across our own data.
+const MERGE_THRESHOLD = 0.99;
+const REVIEW_THRESHOLD = 0.95;
 const TOP_K = 5;
 
 export type DedupeAction = 'merge' | 'review' | 'create';

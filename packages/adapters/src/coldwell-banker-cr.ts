@@ -22,7 +22,7 @@ const REST_CANDIDATES = [
   '/wp-json/wp/v2/listing',
   '/wp-json/wp/v2/property',
 ];
-const HTML_LIST_PATH = '/property-search/?status=for-sale';
+const HTML_LIST_PATH = '/costa-rica/property-for-sale';
 
 interface WpRestPost {
   id: number;
@@ -86,7 +86,7 @@ async function* enumerateListingUrls(opts: EnumerateOpts): AsyncIterable<string>
   for (let page = 1; page <= 50 && emptyStreak < 2; page++) {
     if (opts.signal?.aborted) return;
     if (yielded >= max) return;
-    const url = `${BASE}${HTML_LIST_PATH}${page > 1 ? `&pagi=${page}` : ''}`;
+    const url = `${BASE}${HTML_LIST_PATH}${page > 1 ? `?page=${page}` : ''}`;
     let html: string;
     try {
       const res = await fetchHtml(url, { signal: opts.signal });

@@ -122,8 +122,8 @@ export async function publish(
         await client.query(
           `insert into listing_embeddings (canonical_listing_id, embedding, model, text_hash)
            values ($1, $2::vector, $3, $4)
-           on conflict (canonical_listing_id) do update
-             set embedding = excluded.embedding, model = excluded.model, text_hash = excluded.text_hash`,
+           on conflict (canonical_listing_id, model) do update
+             set embedding = excluded.embedding, text_hash = excluded.text_hash`,
           [canonicalId, literal, process.env['VOYAGE_API_KEY'] ? 'voyage-2' : 'hash-dev', dedupeResult.text_hash],
         );
       }
@@ -154,7 +154,7 @@ export async function publish(
         const isHero = pos === (enriched.hero_photo_index ?? 0);
         const altText = enriched.photos_alt?.[String(pos)] ?? p.alt ?? null;
         await client.query(
-          `insert into photos (canonical_listing_id, url_source, width, height, position, alt_text, is_hero, phash)
+          `insert into photos (canonical_listing_id, url_source, width, height, position, alt_text_en, is_hero, phash)
            values ($1,$2,$3,$4,$5,$6,$7,$8)`,
           [canonicalId, p.url, p.width ?? null, p.height ?? null, pos, altText, isHero, phash ?? null],
         );

@@ -47,7 +47,9 @@ export function buildExtractUserMessage(opts: {
   rawExtracted?: Record<string, unknown>;
   sourceUrl: string;
 }): string {
-  const truncated = opts.html.length > 60_000 ? opts.html.slice(0, 60_000) + '\n... [truncated]' : opts.html;
+  // Aggressively trim: most useful content is in the first 25k chars (head + above-the-fold).
+  // Reduces input tokens 4× → keeps us under Anthropic 50K tokens/min rate limit.
+  const truncated = opts.html.length > 25_000 ? opts.html.slice(0, 25_000) + '\n... [truncated]' : opts.html;
   const rawJson = opts.rawExtracted && Object.keys(opts.rawExtracted).length
     ? JSON.stringify(opts.rawExtracted, null, 2)
     : '(none)';

@@ -13,7 +13,10 @@ export const Limits = {
     autoPause5xxRate: 0.10,
   },
   ai: {
-    maxConcurrent: 4,
+    // Keep low — Anthropic free-tier accounts typically have 50K input tokens/min
+    // and each listing's extract uses ~15-20K input tokens. 1 concurrent
+    // means ~3-4 calls/min sustained, well under cap.
+    maxConcurrent: 1,
     perCallTimeoutMs: 60_000,
   },
   photos: {
@@ -37,7 +40,7 @@ export const Limits = {
 export const ModelPricing = {
   // USD per 1M tokens, current pricing as of 2026-04
   'claude-haiku-4-5-20251001': { input: 1.0, output: 5.0 },
-  'claude-sonnet-4-6-20250929': { input: 3.0, output: 15.0 },
+  'claude-sonnet-4-6': { input: 3.0, output: 15.0 },
 } as const;
 
 export type SupportedModel = keyof typeof ModelPricing;

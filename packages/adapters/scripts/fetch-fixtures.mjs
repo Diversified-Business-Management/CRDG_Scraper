@@ -4,9 +4,18 @@
  *
  *   node scripts/fetch-fixtures.mjs
  *
- * Polite: 1 req / sec, max 10 detail + 5 search fetches total.
+ * Polite: 1 req / sec, max ~14 fetches total.
  * If a fetch fails (Cloudflare 403, etc.) the script logs the error and
- * continues; the corresponding test will fall back to a synthetic fixture.
+ * continues; the corresponding test will use the synthetic fallback fixture
+ * already committed under test/fixtures/.
+ *
+ * Known status (last run 2026-04-27):
+ *   encuentra24         OK (search index page is JS-rendered; 2 detail pages OK)
+ *   point2homes-cr      403 Cloudflare — synthetic fixtures used
+ *   mlscr               OK (despite being marketed as JS-rendered, mls.cr WP
+ *                       theme inlines listing data in raw HTML)
+ *   coldwell-banker-cr  OK (after we found /property/{slug}/{id} URL pattern)
+ *   developers-generic  OK (reservaconchal.com)
  */
 
 import { fetch } from 'undici';
@@ -20,22 +29,27 @@ const FIXTURE_DIR = join(__dirname, '..', 'test', 'fixtures');
 const UA = 'Mozilla/5.0 (compatible; CRDG-Bot/1.0; +mailto:diversifiedbusinessmgmt@gmail.com)';
 
 const TARGETS = [
-  // encuentra24 — search + 2 details
-  { slug: 'encuentra24', kind: 'search', url: 'https://www.encuentra24.com/costa-rica-en/real-estate-for-sale-in-guanacaste' },
-  { slug: 'encuentra24', kind: 'listing-1', url: 'https://www.encuentra24.com/costa-rica-en/real-estate-for-sale' },
-  { slug: 'encuentra24', kind: 'listing-2', url: 'https://www.encuentra24.com/costa-rica-en/real-estate-for-sale' },
+  // encuentra24
+  { slug: 'encuentra24', kind: 'search-live-shell', url: 'https://www.encuentra24.com/costa-rica-en/real-estate-for-sale-in-guanacaste' },
+  { slug: 'encuentra24', kind: 'listing-1', url: 'https://www.encuentra24.com/costa-rica-en/real-estate-for-sale-houses-homes/contemporary-two-story-home-for-sale-in-guachipelin-escazu-499-000/31381092' },
+  { slug: 'encuentra24', kind: 'listing-2', url: 'https://www.encuentra24.com/costa-rica-en/real-estate-for-sale-apartments-condos/modern-furnished-apartment-for-sale-high-floor-nucleo-sabana-ideal-for-investment/32110136' },
 
-  // point2homes-cr
-  { slug: 'point2homes-cr', kind: 'search', url: 'https://www.point2homes.com/CR/Real-Estate.html' },
+  // point2homes — known to 403; left here so the script tries (and fails) for visibility
+  { slug: 'point2homes-cr', kind: 'search-live', url: 'https://www.point2homes.com/CR/Real-Estate.html' },
 
   // mlscr
   { slug: 'mlscr', kind: 'search', url: 'https://mls.cr/' },
+  { slug: 'mlscr', kind: 'listing-1', url: 'https://mls.cr/properties/orange-house/' },
+  { slug: 'mlscr', kind: 'listing-2', url: 'https://mls.cr/properties/spectacular-ocean-view-farm/' },
 
   // coldwell banker
-  { slug: 'coldwell-banker-cr', kind: 'search', url: 'https://www.coldwellbankercostarica.com/property-search/?status=for-sale' },
+  { slug: 'coldwell-banker-cr', kind: 'search', url: 'https://www.coldwellbankercostarica.com/costa-rica/property-for-sale' },
+  { slug: 'coldwell-banker-cr', kind: 'listing-1', url: 'https://www.coldwellbankercostarica.com/property/1-bed-commercial-for-sale-in-santa-ana/14598' },
+  { slug: 'coldwell-banker-cr', kind: 'listing-2', url: 'https://www.coldwellbankercostarica.com/property/land-for-sale-in-playa-san-miguel/14594' },
 
-  // developers
+  // developer pages (CRDG partners)
   { slug: 'developers-generic', kind: 'listing-1', url: 'https://reservaconchal.com/sanara' },
+  { slug: 'developers-generic', kind: 'listing-2', url: 'https://reservaconchal.com/real-state/' },
 ];
 
 async function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
@@ -56,7 +70,7 @@ async function fetchOne(target) {
     clearTimeout(t);
     const html = await res.text();
     if (res.status >= 400) {
-      console.warn(`[skip] ${target.slug}/${target.kind} HTTP ${res.status} — leaving fixture for synthetic fallback.`);
+      console.warn(`[skip] ${target.slug}/${target.kind} HTTP ${res.status} — synthetic fallback in place`);
       return;
     }
     const fname = `${target.slug}-${target.kind}.html`;

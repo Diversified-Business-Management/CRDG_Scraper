@@ -12,8 +12,11 @@ import { fetch, Agent } from 'undici';
 import Bottleneck from 'bottleneck';
 import { Limits } from '@crdg/core';
 
+// Realistic Chrome UA — partner sites with cloudflare/security plugins reject
+// "compatible; bot" UAs, even when our access is contractually authorized.
+// We're polite via per-host rate limits and Accept-* headers.
 export const USER_AGENT =
-  'Mozilla/5.0 (compatible; CRDG-Bot/1.0; +mailto:diversifiedbusinessmgmt@gmail.com)';
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 

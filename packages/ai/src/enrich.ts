@@ -19,7 +19,7 @@ import {
 } from './prompts/enrich.js';
 
 const HAIKU = 'claude-haiku-4-5-20251001' as const;
-const SONNET = 'claude-sonnet-4-6-20250929' as const;
+const SONNET = 'claude-sonnet-4-6' as const;
 const MAX_PHOTOS_FOR_HERO = 6;
 
 export interface EnrichOpts {

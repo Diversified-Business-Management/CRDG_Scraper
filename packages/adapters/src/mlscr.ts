@@ -7,7 +7,7 @@
 
 import * as cheerio from 'cheerio';
 import type { EnumerateOpts, RawListingPayload, RawPhoto, SourceAdapter } from '@crdg/core';
-import { renderPage } from './util/playwright.js';
+import { fetchHtml } from './util/http.js';
 import {
   absolutizeUrl,
   dedupePhotos,
@@ -17,7 +17,7 @@ import {
 } from './util/extract.js';
 
 const BASE = 'https://mls.cr';
-const SEARCH_PATH = '/search/?listing_type=sale';
+const SEARCH_PATH = '/properties/';
 
 // mls.cr uses WordPress with custom post type slugs at /properties/{slug}/
 const LISTING_HREF_RE = /^https?:\/\/(?:www\.)?mls\.cr\/properties\/[^"' >/]+\/?$/i;
@@ -50,7 +50,7 @@ async function* enumerateListingUrls(opts: EnumerateOpts): AsyncIterable<string>
     if (yielded >= max) return;
     let html: string;
     try {
-      const res = await renderPage(searchUrl(page), { signal: opts.signal });
+      const res = await fetchHtml(searchUrl(page), { signal: opts.signal });
       if (res.status >= 400) break;
       html = res.html;
     } catch {
@@ -146,7 +146,7 @@ function extractId(url: string, $: cheerio.CheerioAPI, main: Record<string, unkn
 }
 
 async function fetchListing(url: string): Promise<RawListingPayload> {
-  const { html, finalUrl } = await renderPage(url);
+  const { html, finalUrl } = await fetchHtml(url);
   return parseListingHtml(html, finalUrl);
 }
 

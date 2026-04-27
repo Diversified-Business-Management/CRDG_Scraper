@@ -76,8 +76,10 @@ export async function runSource(
       seen++; run.bumpSeen();
 
       tasks.push(limit(async () => {
+        let rawId: string | null = null;
+        let raw: RawListingPayload | null = null;
         try {
-          const raw = await adapter.fetchListing(url);
+          raw = await adapter.fetchListing(url);
           metrics.fetched++;
           await checkAutoPause();
 
@@ -108,27 +110,9 @@ export async function runSource(
             raw.raw_extracted ? JSON.stringify(raw.raw_extracted) : null,
             JSON.stringify(raw.photos ?? []),
           ]);
-          const rawId = inserted[0]!.id;
+          rawId = inserted[0]!.id;
           if (inserted[0]!.was_new) newCount++, run.bumpNew();
           else run.bumpUpdated();
-
-          // Chain into AI pipeline (concurrency-limited)
-          tasks.push(pipelineLimit(async () => {
-            try {
-              const pipelineCost = await opts.pipeline.runAll(rawId, raw, run);
-              run.addCost(pipelineCost);
-            } catch (e) {
-              if (e instanceof BudgetExceededError) {
-                paused = true;
-                ctrl.abort();
-                await run.log('pipeline', 'warn', `Budget exceeded, halting source: ${e.message}`);
-                return;
-              }
-              const err = e as Error;
-              await run.log('pipeline', 'error', `Pipeline failed for ${url}: ${err.message}`, { stack: err.stack });
-              run.bumpFailed(); failed++;
-            }
-          }));
         } catch (e) {
           metrics.errorsTotal++;
           const err = e as Error & { status?: number };
@@ -136,7 +120,28 @@ export async function runSource(
           await run.log('fetch', 'error', `Fetch failed for ${url}: ${err.message}`, { url });
           run.bumpFailed(); failed++;
           await checkAutoPause();
+          return;
         }
+
+        // Run AI pipeline inline (still concurrency-limited via outer fetch limiter
+        // and the pipeline limiter). Awaiting here means the outer task only resolves
+        // after the pipeline completes, so Promise.all(tasks) waits for everything.
+        await pipelineLimit(async () => {
+          try {
+            const pipelineCost = await opts.pipeline.runAll(rawId!, raw!, run);
+            run.addCost(pipelineCost);
+          } catch (e) {
+            if (e instanceof BudgetExceededError) {
+              paused = true;
+              ctrl.abort();
+              await run.log('pipeline', 'warn', `Budget exceeded, halting source: ${e.message}`);
+              return;
+            }
+            const err = e as Error;
+            await run.log('pipeline', 'error', `Pipeline failed for ${url}: ${err.message}`, { stack: err.stack });
+            run.bumpFailed(); failed++;
+          }
+        });
       }));
     }
 
