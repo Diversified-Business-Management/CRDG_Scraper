@@ -1,11 +1,39 @@
 /**
  * Houzez WordPress REST API client.
- * Auth: Application Password (Basic auth).
+ * Auth: JWT via the JWT Authentication for WP REST API plugin (tmeister).
+ *
+ * The plugin's `/jwt-auth/v1/token` endpoint takes username + password and
+ * returns a token valid for 7 days. We cache it in-process and refresh on 401.
  */
 import { env, logger, Limits } from '@crdg/core';
 import { fetch } from 'undici';
 
-const auth = 'Basic ' + Buffer.from(`${env.wp.username}:${env.wp.appPassword.replace(/\s/g, '')}`).toString('base64');
+let cachedToken: string | null = null;
+let cachedTokenAt = 0;
+const TOKEN_TTL_MS = 6 * 24 * 60 * 60 * 1000; // refresh after 6 days, plugin issues 7-day tokens
+
+async function getJwtToken(force = false): Promise<string> {
+  if (!force && cachedToken && Date.now() - cachedTokenAt < TOKEN_TTL_MS) return cachedToken;
+  const wpPassword = process.env.WP_LOGIN_PASSWORD ?? process.env.WP_APP_PASSWORD;
+  if (!wpPassword) throw new Error('WP_LOGIN_PASSWORD env var required for JWT auth');
+  const url = `${env.wp.baseUrl.replace(/\/+$/, '')}/wp-json/jwt-auth/v1/token`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({ username: env.wp.username, password: wpPassword }),
+    signal: AbortSignal.timeout(Limits.wp.perRequestTimeoutMs),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`JWT token request failed (${res.status}): ${text.slice(0, 200)}`);
+  }
+  const json = (await res.json()) as { token?: string; user_email?: string };
+  if (!json.token) throw new Error('JWT response missing token');
+  cachedToken = json.token;
+  cachedTokenAt = Date.now();
+  logger.info({ user: json.user_email }, 'wp.jwt.token_acquired');
+  return cachedToken;
+}
 
 interface RequestOpts {
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
@@ -14,10 +42,11 @@ interface RequestOpts {
   headers?: Record<string, string>;
 }
 
-async function wpRequest<T = unknown>(path: string, opts: RequestOpts = {}): Promise<T> {
+async function wpRequest<T = unknown>(path: string, opts: RequestOpts = {}, retryOn401 = true): Promise<T> {
   const url = `${env.wp.baseUrl.replace(/\/+$/, '')}/wp-json${path.startsWith('/') ? '' : '/'}${path}`;
+  const token = await getJwtToken();
   const headers: Record<string, string> = {
-    Authorization: auth,
+    Authorization: `Bearer ${token}`,
     Accept: 'application/json',
     ...(opts.headers ?? {}),
   };
@@ -38,6 +67,12 @@ async function wpRequest<T = unknown>(path: string, opts: RequestOpts = {}): Pro
   });
   const text = await res.text();
   if (!res.ok) {
+    if (res.status === 401 && retryOn401) {
+      // Token may have expired or rotated; force-refresh and retry once.
+      logger.info('wp.jwt.refresh_after_401');
+      cachedToken = null;
+      return wpRequest<T>(path, opts, false);
+    }
     logger.warn({ url, status: res.status, body: text.slice(0, 500) }, 'wp.error');
     const err: Error & { status?: number; body?: string } = new Error(`WP ${res.status}: ${text.slice(0, 200)}`);
     err.status = res.status;

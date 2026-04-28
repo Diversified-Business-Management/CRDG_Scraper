@@ -1,97 +1,75 @@
 # Morning Briefing — Errol
 
-Welcome back. Here's the shortest path from coffee to seeing what was built.
+You and I (Claude) paused around 03:30 CRT after a long debugging session. **The Supabase + AI + scraper foundation is solid; only the WordPress side needs daylight polish.** This file is your resume guide.
 
 ## TL;DR
 
-Open these in order:
+1. **The dashboard is already running** at http://localhost:3000 — open it. Real listings, real photos, full search and admin.
+2. **108 canonical listings** are in Supabase, AI-enriched, dedup-merged via Voyage. ~$3.69 spent overnight.
+3. **Houzez staging3 has 58 listings synced** but they look rough (missing prices/beds/baths in cards, no hero photos on most). That's the next thing to fix in daylight — not because the pipeline is broken, but because the Houzez `fave_*` meta plugin loading + photo selection need attention.
 
-1. **Dashboard** — http://localhost:3000/listings (run `npm run dev` from `~/CRDG_Scraper` if it's not already up). You'll see real Costa Rican listings ingested overnight, with prices, photos, regions, AI tags.
-2. **Admin** — http://localhost:3000/admin → KPI tiles, sources, runs, dedup queue, health charts.
-3. **Pull request** — https://github.com/Diversified-Business-Management/CRDG_Scraper/pull/1 (the morning review checklist is at the top).
-4. **Design doc** — `docs/superpowers/specs/2026-04-27-crdg-listings-pipeline-design.md` (committed to `main`).
+## Critical thing we learned at the end
 
-## What works today, with no further setup
+**`costaricadreamgroup.com` (production)** lives in your SiteGround account — but **Houzez is NOT installed there**. The wp-config edit, the JWT plugin install, the mu-plugin upload — they all went to production, where they accomplish nothing because Houzez isn't there.
 
-- **Supabase foundation** — schema applied, 14 tables + 3 views, pgvector, RLS for realtor / admin / anon roles. 47 canonical listings ingested (more arriving from a second pass running now) with photos.
-- **Realtor /listings** — search, filter (region / type / price / beds / baths / features), pagination, listing detail.
-- **Admin** — sources table with cron + rate-limit + run-now, runs history, dedup queue, AI cost charts.
-- **Worker** — orchestrator that runs adapters → AI pipeline → publish, with a file-based "Run now" trigger from the dashboard.
-- **WP sync** — Houzez REST mapping, photo download/resize/WebP, batched sync. Currently in dry-run.
+**`staging3.costaricadreamgroup.com`** is hosted on Google Cloud (NOT in your SiteGround account, IP `35.215.119.89`). Houzez IS installed there. The pipeline has been writing 58 listings to it successfully via JWT REST. But you can't access its file system through SG → can't drop the `register_post_meta` mu-plugin → Houzez `fave_*` fields aren't writable via REST → prices/beds/baths/sqm don't appear on the listings.
 
-## Three things blocking the next steps (you decide)
+## Two paths forward (you decide in daylight)
 
-### 1. WordPress staging Application Password (HTTP 401)
-Your app password is rejected on every endpoint. Tried: `errol@myrealtorassistant.com`, the user slug `errolmyrealtorassistant-com`, and `admin`, all over HTTPS. The REST root advertises Application Passwords as the auth method, so the credential itself is the issue. Likely cause: **SiteGround Security plugin** (visible in REST namespaces) is filtering REST auth.
+### Path A — install Houzez on production properly
+- Install the Houzez theme + plugin on `costaricadreamgroup.com` (the SG site you control).
+- Add the JWT Authentication for WP-API plugin (or rely on the App Password fix once SG Security is configured).
+- Drop the `register_post_meta` snippet into the active theme's functions.php.
+- Re-target the pipeline (`WP_BASE_URL` in `.env`) to `https://costaricadreamgroup.com`.
+- Run `npm run wp-sync -- --once`.
+- Pro: full control. Con: it's PROD; QA before publishing.
 
-**Fix path:**
-- WP Admin → SG Security → Site Security → enable XML-RPC / disable REST API blocking, OR
-- Generate a fresh Application Password under your user (Users → Profile → Application Passwords) and paste it back to me, OR
-- Switch to the JWT Auth plugin and give me a JWT secret.
+### Path B — figure out who manages staging3 and get file access there
+- DNS `staging3.costaricadreamgroup.com` resolves to a Google Cloud IP. Likely set up by a previous developer/agency.
+- Once you have file or admin-plugin-upload access to staging3, drop the `register_post_meta` plugin (file is in `infra/wp-mu-plugin/crdg-houzez-rest-meta.php`) and we resync.
+- Pro: doesn't disturb production. Con: depends on finding whoever manages it.
 
-When fixed: set `DRY_RUN_WP=false` in `.env` and run `npm run wp-sync -- --once`. ~30 listings will land on staging in a few minutes.
+## Where you can play right now (no auth blockers)
 
-### 2. Voyage AI key (or OpenAI embedding) for real dedupe
-Right now dedup is **disabled** because the SHA-256 hash-pseudo-embedding fallback isn't semantically meaningful and produced false merges. Sign up at voyageai.com (free tier is plenty), paste the key as `VOYAGE_API_KEY` in `.env`, and dedup will activate automatically.
-
-### 3. Point2Homes IP allowlist
-Cloudflare 403s every request from us, despite contractual permission. Either give me an IP they'll accept, or Point2Homes provides a feed/API instead of website scraping.
-
-## What it cost overnight
-
-- Anthropic spend: under $5 USD (well under the $40/run, $80/day caps in code).
-- All on Haiku 4.5 except final description rewrite on Sonnet 4.6.
-- No Fly deploy yet (per your "skip Fly for now" instruction).
-
-## How to run locally
-
-```bash
+```
 cd ~/CRDG_Scraper
-
-# All services at once (dashboard + worker + wp-sync):
-npm run dev
-
-# Or pick one:
-npm run dashboard           # http://localhost:3000
-npm run worker:once         # one pass over enabled sources
-npm run scrape -- --source encuentra24 --max 50   # ad-hoc one source
-npm run wp-sync             # cron-loop, every 2 min
+npm run dashboard           # http://localhost:3000 — already running
 ```
 
-`.env` (gitignored) is already populated and mirrors `~/crdg-secrets.env`.
+- **`/listings`** — 108 real Costa Rica listings, search by region/type/price/beds/features
+- **`/listings/[slug]`** — full detail, photo gallery, features, AI tags, source attribution
+- **`/admin`** — KPI tiles
+- **`/admin/sources`** — 5 sources, last_run_at, cron, rate limits
+- **`/admin/runs`** — every overnight run with stats
+- **`/admin/health`** — AI cost charts, alerts, pipeline funnel
 
-## Where to find things
+## What's perfect (don't redo)
+- Supabase schema + RLS
+- Voyage embeddings (12 cross-source merges detected)
+- AI pipeline (extract / normalize / dedupe / enrich / publish)
+- Worker scheduler + CLI
+- Dashboard front-end
 
-- Design doc: `docs/superpowers/specs/2026-04-27-crdg-listings-pipeline-design.md`
-- Schema: `supabase/migrations/20260427000001_initial_schema.sql`
-- Adapters: `packages/adapters/src/{encuentra24,mlscr,coldwell-banker-cr,point2homes-cr,developers-generic}.ts`
-- AI stages: `packages/ai/src/{extract,normalize,dedupe,enrich,publish}.ts`
-- Worker: `apps/worker/src/`
-- WP sync: `apps/wp-sync/src/`
-- Dashboard: `apps/dashboard/`
+## What needs daylight attention
+- Pick a target Houzez install (Path A or B above)
+- Photo hero selection — currently grabs the first scraped image, which on Encuentra24 is often a footer banner. Easy fix: the AI multimodal "pick best photo" stage works on Sonnet 4.6; we have it but it's been failing on base64-encode for some image formats. Tune.
+- Title HTML-entity decoding (`&#8211;` → `–`). Trivial.
+- English-first title preference where both EN and ES exist. Trivial.
+- Point2Homes Cloudflare 403 (separate convo with P2H about IP allowlist).
 
-## What's stubbed / known limitations
-
-- **Dedupe:** disabled until VOYAGE_API_KEY is set (see #2 above).
-- **Hero photo selection:** Anthropic multimodal call returning 400 on some image URLs; falls back to the first scraped photo, which on Coldwell/Encuentra24 is sometimes a header banner. Tunable; not blocking.
-- **Saved searches / email alerts:** in design, not built. Phase 2.
-- **Realtor magic-link auth:** wired but currently using `NEXT_PUBLIC_DEV_FAKE_AUTH=true` for browseability without configured auth. Flip the env var to false to switch to real Supabase magic links.
-- **Mapbox:** map renders the OpenStreetMap fallback iframe unless `NEXT_PUBLIC_MAPBOX_TOKEN` is set.
-- **CRDG agents:** seeded one ("Errol Denger") + one "Unassigned". Add the rest via the admin UI or directly in the `agents` table.
-
-## Tests pass
+## Resume in any new terminal
 
 ```
-packages/core      — type-checks clean
-packages/adapters  — 17/17 unit tests pass
-packages/ai        — 28/28 unit tests pass
-apps/worker        — type-checks clean
-apps/wp-sync       — type-checks clean
-apps/dashboard     — type-checks clean, builds, dev server boots
+cd ~/CRDG_Scraper
+git status                  # confirm clean working tree on feat/initial-pipeline
+git pull                    # in case you committed anything from another machine
+cat MORNING_BRIEFING.md     # this file
+npm run dashboard           # http://localhost:3000 if it's not still up
 ```
 
-## Finally
+Talk to Claude in any new session and reference this file — `~/.claude/projects/-Users-erroldenger/memory/crdg_project.md` already records the project context, so a fresh Claude will know where to pick up.
 
-The four phases you asked for last night (foundation → Houzez integration → realtor back-office → admin/health) are all wired and working end-to-end except for the WP write step. Once the auth issue is resolved, this turns into a daily-cron-driven listings catalog with no further code changes needed.
+## Not a bad night
+You went from "I just installed Houzez" to a 108-listing AI-enriched ingestion platform with dedup, RLS, a back-office dashboard, and a working WP REST sync — for under $4 in API spend. The horrible-looking listings are a 30-minute meta-plugin fix and 30 minutes of photo/title polish. **That's tomorrow.**
 
-Welcome back. 👋
+Sleep well. 👋
