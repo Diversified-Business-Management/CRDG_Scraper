@@ -14,6 +14,8 @@ HARD RULES
 - Currency must be "USD" or "CRC" only. If price is in colones, set price_currency="CRC". If clearly USD ("$", "USD"), use "USD".
 - Surfaces in m² (square meters). 1 sqft = 0.092903 m². 1 acre = 4046.86 m². Round to 2 decimals.
 - bedrooms / bathrooms: half-baths allowed (1.5, 2.5). Numbers, not strings.
+- BATHROOMS — search the entire description AND any spec table. Look for: "X baños", "X bathrooms", "X.5 baños", "X½", "X full + Y half", "medio baño", "half bath", "powder room", "ensuite". A "social bathroom" or "powder room" is a half-bath. If you see "3 bedrooms, 2.5 baths" → bathrooms=2.5, bathrooms_full=2, bathrooms_half=1. If only "2 bathrooms" → bathrooms=2 (don't infer half). Never leave bathrooms null if any bath mention exists.
+- INTERIOR_SQM — hunt for: "X m²", "X m2", "X metros cuadrados", "X mts2", "X sqft", "X square feet", "construcción de X", "área construida X", "X m² of construction", "built area", "habitable area". Convert sqft→m² (×0.092903) and round to 2 decimals. Distinguish from lot_sqm (look for "terreno", "lot", "land", "plot", "área de lote"). If text says "180m² lot, 95m² house" → interior_sqm=95, lot_sqm=180.
 - bathrooms_full + bathrooms_half/2 should equal bathrooms when both are extracted.
 - property_type: one of "house" | "condo" | "lot" | "farm" | "commercial" | "hotel" | "other".
 - language: detect "en" | "es" | "mixed" | "unknown" from the description.
@@ -72,8 +74,13 @@ export function buildExtractUserMessage(opts: {
   breadcrumbs?: string[];
   sourceUrl: string;
 }): string {
-  // Trim aggressively — first 25k chars carries head + above-the-fold + most JSON-LD.
-  const truncated = opts.html.length > 25_000 ? opts.html.slice(0, 25_000) + '\n... [truncated]' : opts.html;
+  // Strip noise (scripts, styles, footers, nav) BEFORE truncating, so the
+  // AI sees the listing detail body instead of just the page header.
+  // Heavy WordPress sites (Coldwell, Houzez-themed) push prices/specs past
+  // byte 30K even after stripping; 60K covers ~95% of pages without going
+  // over Anthropic's 50K input-tokens-per-minute rate limit.
+  const stripped = stripNoise(opts.html);
+  const truncated = stripped.length > 60_000 ? stripped.slice(0, 60_000) + '\n... [truncated]' : stripped;
   const rawJson = opts.rawExtracted && Object.keys(opts.rawExtracted).length
     ? JSON.stringify(opts.rawExtracted, null, 2)
     : '(none)';
@@ -96,4 +103,31 @@ ${truncated}
 \`\`\`
 
 Extract the listing as JSON now. Output a SINGLE JSON object covering all the fields described in the system prompt. Use null for unknowns. Do not output anything else.`;
+}
+
+/**
+ * Aggressive HTML noise stripper. Removes scripts, styles, comments, header/
+ * footer/nav blocks, and collapses whitespace. Listing detail HTML rarely
+ * needs more than 25-30k chars after this.
+ */
+export function stripNoise(html: string): string {
+  let h = html;
+  // Drop <script> / <style> / <noscript> / <template>
+  h = h.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
+  h = h.replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '');
+  h = h.replace(/<noscript\b[^>]*>[\s\S]*?<\/noscript>/gi, '');
+  h = h.replace(/<template\b[^>]*>[\s\S]*?<\/template>/gi, '');
+  // Drop HTML comments
+  h = h.replace(/<!--[\s\S]*?-->/g, '');
+  // Drop common chrome blocks (greedy match conservative — only obvious wrappers)
+  h = h.replace(/<header\b[^>]*>[\s\S]*?<\/header>/gi, '');
+  h = h.replace(/<footer\b[^>]*>[\s\S]*?<\/footer>/gi, '');
+  h = h.replace(/<nav\b[^>]*>[\s\S]*?<\/nav>/gi, '');
+  // Drop SVG icon blobs (often inline)
+  h = h.replace(/<svg\b[^>]*>[\s\S]*?<\/svg>/gi, '');
+  // Drop attributes that are pure styling/JS noise
+  h = h.replace(/\s(style|onclick|onload|onerror|data-[\w-]+|aria-[\w-]+|class)=("[^"]*"|'[^']*'|[^\s>]+)/gi, '');
+  // Collapse whitespace
+  h = h.replace(/\s+/g, ' ').trim();
+  return h;
 }
