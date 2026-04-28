@@ -7,6 +7,9 @@ crdg-secrets.env
 secrets/
 *.pem
 *.key
+SECRETS_REFERENCE.md
+ACCESS_REFERENCE.md
+*.secrets.md
 
 # Node
 node_modules/
