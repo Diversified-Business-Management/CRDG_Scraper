@@ -17,7 +17,11 @@ const nextConfig = {
       { protocol: 'https', hostname: '**.cloudfront.net' },
       { protocol: 'https', hostname: '**.googleusercontent.com' },
       { protocol: 'https', hostname: 'img.youtube.com' },
+      { protocol: 'https', hostname: 'reservaconchal.com' },
+      { protocol: 'https', hostname: '**.reservaconchal.com' },
+      { protocol: 'https', hostname: '**' }, // permissive in dev — listings come from many partner sites
     ],
+    unoptimized: true, // bypass /_next/image proxy entirely (avoids domain whitelist drift)
   },
   experimental: {
     typedRoutes: false,

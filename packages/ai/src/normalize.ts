@@ -6,6 +6,7 @@ import {
   toUsd,
   logger,
 } from '@crdg/core';
+import { computeDistances } from './distance.js';
 
 /**
  * Curated locality → CRDG region map. Lowercase, accent-stripped keys.
@@ -184,12 +185,37 @@ export async function normalize(
     ? `${slugify(extracted.title || extracted.locality || 'untitled', { lower: true, strict: true, locale: 'es' })}-${opts.slugSuffix}`
     : buildSlug({ title: extracted.title, locality: extracted.locality });
 
+  // Currency normalization for HOA, taxes, original list price
+  const hoaUsd = await maybeToUsd(extracted.hoa_fee, extracted.price_currency);
+  const taxesUsd = await maybeToUsd(extracted.taxes_annual, extracted.price_currency);
+  const originalListUsd = await maybeToUsd(extracted.list_price_original, extracted.price_currency);
+
+  // Distances — only meaningful when we have explicit coordinates inside CR.
+  const distances = await computeDistances(
+    extracted.lat != null && extracted.lng != null ? { lat: extracted.lat, lng: extracted.lng } : null,
+  );
+
   return {
     ...extracted,
     price_usd: priceUsd,
     price_per_sqm: pricePerSqm,
+    hoa_fee_usd: hoaUsd,
+    taxes_usd_annual: taxesUsd,
+    list_price_original_usd: originalListUsd,
     region_slug: region,
     geocode_confidence: geocodeConfidence,
     slug: slugBase,
+    ...distances,
   };
+}
+
+async function maybeToUsd(amount: number | null | undefined, currency: ExtractedListing['price_currency']): Promise<number | null> {
+  if (amount == null) return null;
+  try {
+    if (currency === 'USD' || currency == null) return Math.round(amount * 100) / 100;
+    const v = await toUsd(amount, currency);
+    return Math.round(v * 100) / 100;
+  } catch {
+    return null;
+  }
 }

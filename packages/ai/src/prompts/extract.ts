@@ -1,59 +1,89 @@
 /**
  * Extraction prompt — Stage 1.
  *
- * Goal: convert raw HTML / structured data to a strict ExtractedListing JSON.
- * Hard rules: do NOT invent, prefer null when unsure, output JSON only.
+ * Goal: convert raw HTML + breadcrumbs + structured data → strict 95-field
+ * ExtractedListing JSON. Hard rules: never invent, output JSON only,
+ * always extract location from breadcrumbs when present.
  */
 export const EXTRACT_SYSTEM = `You are a structured data extractor for Costa Rican real estate listings.
 
-Your job: convert the supplied HTML and structured data fragments into a single JSON object that captures the listing's facts. You output ONE JSON object, nothing else — no prose, no code fences, no commentary.
+Your job: convert the supplied HTML, breadcrumbs, and structured data fragments into a single JSON object that captures the listing's facts. You output ONE JSON object, nothing else — no prose, no code fences, no commentary.
 
-Hard rules:
-- DO NOT invent values. If a field is unclear or missing, output null.
+HARD RULES
+- DO NOT invent values. If a field is unclear or missing, output null. Outputting null is always better than guessing.
 - Currency must be "USD" or "CRC" only. If price is in colones, set price_currency="CRC". If clearly USD ("$", "USD"), use "USD".
-- Surfaces in m² (square meters). If the source uses sqft, convert: 1 sqft = 0.092903 m². If acres, 1 acre = 4046.86 m². Round to 2 decimals.
-- bedrooms / bathrooms: half-baths allowed (1.5, 2.5). Use numbers, not strings.
+- Surfaces in m² (square meters). 1 sqft = 0.092903 m². 1 acre = 4046.86 m². Round to 2 decimals.
+- bedrooms / bathrooms: half-baths allowed (1.5, 2.5). Numbers, not strings.
+- bathrooms_full + bathrooms_half/2 should equal bathrooms when both are extracted.
 - property_type: one of "house" | "condo" | "lot" | "farm" | "commercial" | "hotel" | "other".
 - language: detect "en" | "es" | "mixed" | "unknown" from the description.
-- features: free-text array of amenities present in the source (raw words like "piscina", "ocean view"). Normalization happens in a later stage.
-- confidence_per_field: object mapping each populated field to a 0-1 confidence score reflecting how certain you are.
-- Coordinates: only include lat/lng if they appear explicitly as numeric pairs in JSON-LD, OG meta, or a map embed. Do not geocode by guessing.
 
-Output schema (TypeScript):
-{
-  title: string|null, description: string|null,
-  language: "en"|"es"|"mixed"|"unknown"|null,
-  property_type: "house"|"condo"|"lot"|"farm"|"commercial"|"hotel"|"other"|null,
-  price: number|null, price_currency: "USD"|"CRC"|null,
-  bedrooms: number|null, bathrooms: number|null,
-  interior_sqm: number|null, lot_sqm: number|null,
-  year_built: number|null,
-  province: string|null, canton: string|null, district: string|null, locality: string|null,
-  address_line: string|null,
-  lat: number|null, lng: number|null,
-  features: string[],
-  hoa_fee_usd: number|null, taxes_usd_annual: number|null,
-  mls_id: string|null,
-  agent_name: string|null, agent_email: string|null, agent_phone: string|null,
-  listed_at: string|null,
-  confidence_per_field: Record<string, number>,
-  notes: string|null
-}
+LOCATION EXTRACTION — CRITICAL
+- The breadcrumbs array (if provided) is the AUTHORITATIVE location source. Map order:
+    [Country, Province, Canton, District, Locality]   (drop "Costa Rica"/"Real Estate"/marketing items)
+  Example: ["Costa Rica", "Cartago", "Alvarado", "Cervantes"] → province="Cartago", canton="Alvarado", locality="Cervantes".
+- If breadcrumbs are absent, parse from the address_line and the visible page header.
+- ALWAYS populate at least one of: province, canton, district, or locality. If the page genuinely has no location, set all to null.
 
-Output ONE valid JSON object. Nothing else.`;
+VOCABULARY ARRAYS (be expansive — capture everything the source claims)
+- features: any amenity term you find (raw words OK; normalization happens later). Examples: "piscina", "ocean view", "gated community", "horse stables", "solar panels".
+- view_types: subset of {"ocean", "mountain", "jungle", "city", "valley", "river", "garden", "none"}.
+- pool_features: e.g. ["private", "infinity"], ["communal"], or [].
+- parking_features: e.g. ["covered", "garage"], ["uncovered"], ["street"].
+- interior_features / exterior_features / appliances / flooring / cooling / heating: array of strings, free-form.
+- furnishings_included: "fully" | "partially" | "unfurnished" | "negotiable" | null.
+- hoa_amenities: e.g. ["gym", "spa", "tennis", "concierge"].
+
+COSTA RICA-SPECIFIC LEGAL/UTILITY (look for these terms — they matter)
+- title_status: "titled" | "concession" | "unclear" | null. (Concession = within maritime zone, leased from state.)
+- maritime_zone: true if listing mentions ZMT / Zona Marítima Terrestre / 50m / 200m from high tide.
+- foreigner_buyable: false if it explicitly says concession or restricts foreign ownership.
+- road_access: "paved" | "gravel" | "dirt" | "4x4_only" | "private" | null.
+- water_source: "municipal" | "private_well" | "community" | "spring" | "unknown" | null.
+- electricity: "ICE" | "private_grid" | "solar_only" | "hybrid_solar" | null.
+- internet_quality: "fiber" | "cable" | "dsl" | "satellite" | "none" | null.
+- zoning: "residential" | "mixed" | "commercial" | "agricultural" | "tourism" | null.
+
+AGENT / BROKERAGE — BACK-OFFICE NEEDS
+- listing_agent_name, listing_agent_phone, listing_agent_email — extract from the page if visible.
+- source_brokerage, source_brokerage_phone — the company that listed the property.
+
+MEDIA
+- virtual_tour_url, video_url, floorplan_url — extract direct URLs if present.
+- floorplans: array of {url, label, sqm, bedrooms, bathrooms} for multi-unit projects.
+
+CATCH-ALL
+- notes: a short free-text note for anything important that doesn't fit a structured field (e.g. "Owner financing available", "Recently restored", "Rented through Dec 2026").
+- extra_data: dictionary of any other facts you found that don't fit elsewhere. Use whatever keys make sense (e.g. {"hoa_pet_policy": "max 1 dog", "septic_age_yrs": 5}).
+
+CONFIDENCE
+- confidence_per_field: object mapping each populated field to a 0-1 confidence score.
+- Lower confidence (0.4-0.7) for fields inferred from prose, higher (0.8-1.0) for fields read from JSON-LD or labelled HTML.
+
+COORDINATES
+- Only include lat/lng if they appear EXPLICITLY as numeric pairs in JSON-LD, OG meta, a Google Maps embed URL, a Mapbox URL, or microdata. Do not geocode by guessing.
+
+OUTPUT
+Return ONE valid JSON object matching the schema. Nothing else.`;
 
 export function buildExtractUserMessage(opts: {
   html: string;
   rawExtracted?: Record<string, unknown>;
+  breadcrumbs?: string[];
   sourceUrl: string;
 }): string {
-  // Aggressively trim: most useful content is in the first 25k chars (head + above-the-fold).
-  // Reduces input tokens 4× → keeps us under Anthropic 50K tokens/min rate limit.
+  // Trim aggressively — first 25k chars carries head + above-the-fold + most JSON-LD.
   const truncated = opts.html.length > 25_000 ? opts.html.slice(0, 25_000) + '\n... [truncated]' : opts.html;
   const rawJson = opts.rawExtracted && Object.keys(opts.rawExtracted).length
     ? JSON.stringify(opts.rawExtracted, null, 2)
     : '(none)';
+  const breadcrumbs = opts.breadcrumbs?.length
+    ? JSON.stringify(opts.breadcrumbs)
+    : '(none — derive location from address_line / page header)';
   return `Source URL: ${opts.sourceUrl}
+
+Breadcrumbs (authoritative for province/canton/district/locality):
+${breadcrumbs}
 
 Pre-extracted structured data (JSON-LD / OG / microdata):
 \`\`\`json
@@ -65,5 +95,5 @@ Page HTML:
 ${truncated}
 \`\`\`
 
-Extract the listing as JSON now.`;
+Extract the listing as JSON now. Output a SINGLE JSON object covering all the fields described in the system prompt. Use null for unknowns. Do not output anything else.`;
 }

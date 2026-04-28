@@ -26,9 +26,11 @@ export async function extract(
   const html = raw.raw_html ?? '';
   const sourceUrl = raw.source_url;
   const rawExtracted = raw.raw_extracted ?? {};
+  const breadcrumbs = raw.breadcrumbs;
   const userMessage = buildExtractUserMessage({
     html,
     rawExtracted,
+    breadcrumbs,
     sourceUrl,
   });
 
@@ -36,7 +38,7 @@ export async function extract(
     model: opts.model ?? MODEL,
     system: EXTRACT_SYSTEM,
     messages: [{ role: 'user', content: userMessage }],
-    maxTokens: 2048,
+    maxTokens: 4096,
     temperature: 0,
     purpose: 'extract',
   });
@@ -54,8 +56,10 @@ export function safeParse(
   raw: RawListingPayload,
 ): ExtractedListing {
   try {
-    const json = tryParseJson<unknown>(text);
-    return ExtractedListing.parse(json);
+    const json = tryParseJson<Record<string, unknown>>(text);
+    // Apply breadcrumb-derived location if AI missed it
+    const enriched = applyBreadcrumbsFallback(json, raw.breadcrumbs);
+    return ExtractedListing.parse(enriched);
   } catch (e) {
     logger.warn(
       { err: (e as Error).message, snippet: text.slice(0, 200) },
@@ -63,6 +67,28 @@ export function safeParse(
     );
     return salvageFromRaw(raw);
   }
+}
+
+/** Backstop: if AI returned null for province/canton/locality but breadcrumbs are present, fill them in. */
+function applyBreadcrumbsFallback(
+  obj: Record<string, unknown>,
+  breadcrumbs?: string[],
+): Record<string, unknown> {
+  if (!breadcrumbs || breadcrumbs.length === 0) return obj;
+  // Drop generic items that aren't location levels
+  const skip = /^(home|costa rica|real estate|for sale|properties|listings|search|sale)$/i;
+  const levels = breadcrumbs.filter(b => b && !skip.test(b.trim()));
+  // levels[0..3] usually map to province → canton → district → locality
+  const out = { ...obj };
+  if (!out['province'] && levels[0]) out['province'] = levels[0];
+  if (!out['canton'] && levels[1]) out['canton'] = levels[1];
+  if (!out['district'] && levels[2]) out['district'] = levels[2];
+  if (!out['locality'] && levels[3]) out['locality'] = levels[3];
+  // If only one level was extracted (e.g., just a town), use it as locality
+  if (!out['locality'] && !out['district'] && levels[1] && !out['canton']) {
+    out['locality'] = levels[1];
+  }
+  return out;
 }
 
 /**
@@ -77,9 +103,12 @@ export function salvageFromRaw(raw: RawListingPayload): ExtractedListing {
     return Number.isFinite(n) ? n : null;
   };
   const strOrNull = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v : null);
-
-  // JSON-LD often nests under "offers" or top-level
   const offers = (e['offers'] as Record<string, unknown> | undefined) ?? {};
+
+  const breadcrumbLevels = (raw.breadcrumbs ?? []).filter(
+    b => b && !/^(home|costa rica|real estate|for sale|properties|listings|search|sale)$/i.test(b.trim()),
+  );
+
   return ExtractedListing.parse({
     title: strOrNull(e['name'] ?? e['title']),
     description: strOrNull(e['description']),
@@ -96,10 +125,10 @@ export function salvageFromRaw(raw: RawListingPayload): ExtractedListing {
     interior_sqm: numOrNull(e['floorSize']),
     lot_sqm: numOrNull(e['lotSize']),
     year_built: null,
-    province: null,
-    canton: null,
-    district: null,
-    locality: strOrNull(
+    province: breadcrumbLevels[0] ?? null,
+    canton: breadcrumbLevels[1] ?? null,
+    district: breadcrumbLevels[2] ?? null,
+    locality: breadcrumbLevels[3] ?? strOrNull(
       ((e['address'] as Record<string, unknown> | undefined) ?? {})['addressLocality'],
     ),
     address_line: strOrNull(
@@ -108,13 +137,6 @@ export function salvageFromRaw(raw: RawListingPayload): ExtractedListing {
     lat: numOrNull(((e['geo'] as Record<string, unknown> | undefined) ?? {})['latitude']),
     lng: numOrNull(((e['geo'] as Record<string, unknown> | undefined) ?? {})['longitude']),
     features: [],
-    hoa_fee_usd: null,
-    taxes_usd_annual: null,
-    mls_id: null,
-    agent_name: null,
-    agent_email: null,
-    agent_phone: null,
-    listed_at: null,
     confidence_per_field: {},
     notes: 'salvaged from raw_extracted after AI parse failure',
   });

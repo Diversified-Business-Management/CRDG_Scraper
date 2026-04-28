@@ -12,14 +12,15 @@ const MODEL = 'claude-haiku-4-5-20251001' as const;
 
 /** Fixed embedding dim for both Voyage 'voyage-2' and our hash fallback. */
 const EMBEDDING_DIM = 1024;
-// Without semantic embeddings (Voyage / OpenAI), dedupe is dangerous — the
-// hash-pseudo-embedding will collide on similar boilerplate. Until production
-// embeddings are wired up, raise both thresholds so the pipeline almost always
-// creates a new canonical and never silently merges. The Haiku judge can still
-// flag review-queue cases when source IDs match across our own data.
-const MERGE_THRESHOLD = 0.99;
-const REVIEW_THRESHOLD = 0.95;
-const TOP_K = 5;
+// With Voyage semantic embeddings active, similar listings (same town, same
+// type, same beds) often score 0.93-0.97 cosine sim even when they are NOT
+// duplicates — neighbors not the same property. Use a high merge bar AND
+// effectively disable the review queue (set review = merge threshold) so
+// every distinct listing creates its own canonical. Real duplicates that
+// score >= MERGE_THRESHOLD still get merged automatically.
+const MERGE_THRESHOLD = 0.985;
+const REVIEW_THRESHOLD = 0.985;
+const TOP_K = 3;
 
 export type DedupeAction = 'merge' | 'review' | 'create';
 

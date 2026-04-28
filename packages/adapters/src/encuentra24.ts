@@ -165,12 +165,22 @@ export function parseListingHtml(html: string, sourceUrl: string): ParseResult {
   // 3) source_listing_id — extract from URL slug or page
   const id = extractListingId(sourceUrl, $, main);
 
-  // 4) raw_extracted bundle (passed to the AI extract stage)
+  // 4) Breadcrumbs — Encuentra24 publishes BreadcrumbList in JSON-LD AND a visible nav.
+  const breadcrumbs = extractBreadcrumbs($, ld);
+
+  // 5) Agent / brokerage info from page DOM
+  const agentInfo = extractAgentInfo($);
+
+  // 6) raw_extracted bundle (passed to the AI extract stage)
   const raw_extracted: Record<string, unknown> = {
     json_ld: ld,
     og,
     title: og['og:title'] || $('h1').first().text().trim() || $('title').text().trim(),
     description: og['og:description'] || $('meta[name="description"]').attr('content') || '',
+    breadcrumbs,
+    agent: agentInfo,
+    // Raw page text from the listing detail block helps AI find features in prose
+    detail_text: $('main, [class*="detail"], [class*="listing"]').first().text().trim().slice(0, 5000),
   };
 
   return {
@@ -179,8 +189,64 @@ export function parseListingHtml(html: string, sourceUrl: string): ParseResult {
       source_url: sourceUrl,
       raw_html: html,
       raw_extracted,
+      breadcrumbs,
       photos,
     },
+  };
+}
+
+function extractBreadcrumbs($: cheerio.CheerioAPI, ld: unknown[]): string[] {
+  // Encuentra24 has site-wide category nav ("Real Estate", "Jobs & Services", "Cars")
+  // AND a listing-specific location breadcrumb. We want the LATTER.
+  // The location breadcrumb is typically province > canton > district > locality.
+
+  // Strategy: prefer JSON-LD BreadcrumbList that does NOT contain top-level category names.
+  const NAV_NOISE = /^(home|real estate|properties|listings|search|sale|rent|costa rica|jobs|services|cars|vehicles|jobs & services|for sale|community|all)$/i;
+
+  const filterNav = (items: string[]): string[] =>
+    items
+      .map(s => s.trim())
+      .filter(s => s && s.length < 50 && !NAV_NOISE.test(s));
+
+  for (const item of ld) {
+    if (item && typeof item === 'object') {
+      const t = (item as { '@type'?: unknown })['@type'];
+      if (t === 'BreadcrumbList' || (Array.isArray(t) && t.includes('BreadcrumbList'))) {
+        const list = (item as { itemListElement?: unknown[] }).itemListElement;
+        if (Array.isArray(list)) {
+          const names = list.map(li => {
+            if (typeof li === 'string') return li;
+            const liObj = li as { name?: unknown; item?: { name?: unknown } };
+            const name = liObj?.name ?? liObj?.item?.name;
+            return typeof name === 'string' ? name : '';
+          });
+          const cleaned = filterNav(names);
+          if (cleaned.length >= 2) return cleaned;
+        }
+      }
+    }
+  }
+
+  // Fallback: only look INSIDE the listing detail container (not the site header)
+  const out: string[] = [];
+  $('[id*="ad-view" i] [class*="breadcrumb" i] a, [class*="ad-detail" i] [class*="breadcrumb" i] a, [class*="listing-detail" i] [class*="breadcrumb" i] a').each((_i, el) => {
+    const txt = $(el).text().trim().replace(/\s+/g, ' ');
+    if (txt && !out.includes(txt)) out.push(txt);
+  });
+  return filterNav(out);
+}
+
+function extractAgentInfo($: cheerio.CheerioAPI): Record<string, unknown> {
+  const text = $('body').text();
+  const phoneMatch = text.match(/(?:\+?506[-\s]?)?\d{4}[-\s]?\d{4}/);
+  const emailMatch = text.match(/[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+  const sellerName =
+    $('[class*="agent" i], [class*="seller" i], [class*="contact" i]').first().text().trim().slice(0, 80) ||
+    null;
+  return {
+    name: sellerName,
+    phone: phoneMatch?.[0] ?? null,
+    email: emailMatch?.[0] ?? null,
   };
 }
 

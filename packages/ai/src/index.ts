@@ -148,7 +148,9 @@ export async function runPipeline(rawId: string, raw: RawListingPayload, opts: R
   if (!skip.has('publish') && result.enriched && result.dedupe) {
     await setStageStatus(rawId, 'publish', 'running');
     try {
-      const p = await publish(rawId, result.enriched as never, result.dedupe, raw.photos);
+      // Inject primary_source_url so back-office can show the original listing URL.
+      const enrichedWithSource = { ...(result.enriched as Record<string, unknown>), primary_source_url: raw.source_url };
+      const p = await publish(rawId, enrichedWithSource as never, result.dedupe, raw.photos);
       await setStageStatus(rawId, 'publish', 'done');
       await logRunEvent(opts.runId, 'publish', 'info', 'publish.done', p);
       result.canonical_listing_id = p.canonical_listing_id;
