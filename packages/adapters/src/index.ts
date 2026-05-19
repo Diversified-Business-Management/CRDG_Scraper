@@ -15,12 +15,19 @@ import {
   reCr,
   coldwellCbTamarindo,
   propertiesInCr,
-  sothebysCr,
-  dominicalRealty,
-  twoCrRealEstate,
   crDreamMakers,
   rpmRealEstateCr,
 } from './generic-real-estate.js';
+import {
+  sothebysCrPw,
+  dominicalRealtyPw,
+  twoCrRealEstatePw,
+} from './generic-playwright.js';
+
+// Slugs that have a Playwright variant — these OVERRIDE the static-HTML
+// generic adapter so the registry resolves to the JS-rendering one.
+const PW_OVERRIDES: SourceAdapter[] = [sothebysCrPw, dominicalRealtyPw, twoCrRealEstatePw];
+const PW_SLUGS = new Set(PW_OVERRIDES.map(a => a.slug));
 
 export const ALL_ADAPTERS: SourceAdapter[] = [
   encuentra24,
@@ -28,7 +35,8 @@ export const ALL_ADAPTERS: SourceAdapter[] = [
   mlscr,
   coldwellBankerCr,
   developersGeneric,
-  ...ALL_GENERIC,
+  ...ALL_GENERIC.filter(a => !PW_SLUGS.has(a.slug)),
+  ...PW_OVERRIDES,
 ];
 
 const BY_SLUG: Map<string, SourceAdapter> = new Map(ALL_ADAPTERS.map((a) => [a.slug, a]));
@@ -40,8 +48,9 @@ export function getAdapter(slug: string): SourceAdapter | undefined {
 export {
   encuentra24, point2homesCr, mlscr, coldwellBankerCr, developersGeneric,
   realtorComCr, reCr, coldwellCbTamarindo, propertiesInCr,
-  sothebysCr, dominicalRealty, twoCrRealEstate, crDreamMakers, rpmRealEstateCr,
+  crDreamMakers, rpmRealEstateCr,
 };
+export { sothebysCrPw, dominicalRealtyPw, twoCrRealEstatePw };
 
 // Re-export utilities consumers may want to compose with.
 export { fetchHtml, USER_AGENT } from './util/http.js';
