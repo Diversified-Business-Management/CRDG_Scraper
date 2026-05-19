@@ -8,6 +8,7 @@ import {
 } from '@crdg/core';
 import { computeDistances } from './distance.js';
 import { geocodeCRAddress } from './geocode.js';
+import { cleanTitle, cleanDescription } from './sanitize.js';
 
 /**
  * Curated locality → CRDG region map. Lowercase, accent-stripped keys.
@@ -213,8 +214,14 @@ export async function normalize(
     lat != null && lng != null ? { lat, lng } : null,
   );
 
+  // Sanitize title + description — decode HTML entities, strip brand noise.
+  const cleanedTitle = cleanTitle(extracted.title);
+  const cleanedDesc = cleanDescription(extracted.description);
+
   return {
     ...extracted,
+    title: cleanedTitle,
+    description: cleanedDesc,
     lat,
     lng,
     price_usd: priceUsd,

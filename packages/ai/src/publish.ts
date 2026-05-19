@@ -49,7 +49,13 @@ export async function publish(
       );
     } else {
       action = dedupeResult.action === 'review' ? 'review' : 'create';
-      const status = action === 'review' ? 'pending_review' : 'active';
+      // Quality gate: if the listing is mostly empty, route to review queue.
+      // The realtor decides what to do; the dashboard stays clean.
+      const isThin = isThinListing(enriched);
+      const status = (action === 'review' || isThin) ? 'pending_review' : 'active';
+      if (isThin && action !== 'review') {
+        logger.info({ rawListingId, reason: 'quality_gate' }, 'publish.routed_to_review');
+      }
       const placeholders = cols.insert.columns.map((_, i) => `$${i + 1}`).join(',');
       const inserted = await client.query<{ id: string }>(
         `insert into canonical_listings (${cols.insert.columns.join(',')}, status, listing_type)
@@ -334,6 +340,24 @@ function buildCanonicalRow(e: EnrichedListing & { primary_source_url?: string | 
   };
 
   return { insert, merge };
+}
+
+/**
+ * Quality gate: a listing is "thin" if it lacks the basics a realtor needs to
+ * even glance at it. Thin listings go to pending_review so the dashboard
+ * stays clean.
+ */
+function isThinListing(e: EnrichedListing): boolean {
+  const hasTitle = !!(e.title_en?.trim() || e.title_es?.trim() || e.title?.trim());
+  if (!hasTitle) return true;
+  // Need at least ONE of: price, bedrooms, interior_sqm, lot_sqm.
+  // (Land for sale listings won't have price/beds but should have lot.)
+  const hasAnchor =
+    e.price_usd != null ||
+    e.bedrooms != null ||
+    e.interior_sqm != null ||
+    e.lot_sqm != null;
+  return !hasAnchor;
 }
 
 /** Compute the cross-cutting categories array for a listing. Mirrors the SQL function. */
