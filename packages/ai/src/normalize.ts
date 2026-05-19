@@ -64,6 +64,62 @@ const LOCALITY_TO_REGION: Record<string, RegionSlug> = {
   manzanillo: 'caribbean',
   limon: 'caribbean',
   'puerto limon': 'caribbean',
+  // Additional Guanacaste tourism towns
+  'playa lagarto': 'guanacaste',
+  lagarto: 'guanacaste',
+  langosta: 'guanacaste',
+  'playa langosta': 'guanacaste',
+  marbella: 'guanacaste',
+  junquillal: 'guanacaste',
+  'playa junquillal': 'guanacaste',
+  negra: 'guanacaste',
+  'playa negra': 'guanacaste',
+  'santa cruz': 'guanacaste',
+  'hacienda pinilla': 'guanacaste',
+  'reserva conchal': 'guanacaste',
+  'cabo velas': 'guanacaste',
+  // Nicoya peninsula extensions
+  cobano: 'nicoya',
+  'cóbano': 'nicoya',
+  tambor: 'nicoya',
+  'tambor beach': 'nicoya',
+  cabuya: 'nicoya',
+  paquera: 'nicoya',
+  'playa hermosa montezuma': 'nicoya',
+  // Central Pacific extensions
+  'los suenos': 'central-pacific',
+  'los sueños': 'central-pacific',
+  parrita: 'central-pacific',
+  bejuco: 'central-pacific',
+  'playa bejuco': 'central-pacific',
+  // South Pacific extensions
+  matapalo: 'south-pacific',
+  'cabo matapalo': 'south-pacific',
+  'playa organos': 'south-pacific',
+  organos: 'south-pacific',
+  // Central Valley extensions
+  curridabat: 'central-valley',
+  goicoechea: 'central-valley',
+  desamparados: 'central-valley',
+  moravia: 'central-valley',
+  guadalupe: 'central-valley',
+  tibás: 'central-valley',
+  tibas: 'central-valley',
+  hatillo: 'central-valley',
+  'san pedro': 'central-valley',
+  'tres rios': 'central-valley',
+  'tres ríos': 'central-valley',
+  'san isidro': 'central-valley',
+  'san isidro de coronado': 'central-valley',
+  pozos: 'central-valley',
+  lindora: 'central-valley',
+  ulloa: 'central-valley',
+  barva: 'central-valley',
+  belén: 'central-valley',
+  belen: 'central-valley',
+  pavas: 'central-valley',
+  cariari: 'central-valley',
+  rohrmoser: 'central-valley',
 
   // Central Valley
   atenas: 'central-valley',
@@ -173,13 +229,7 @@ export async function normalize(
     pricePerSqm = Math.round((priceUsd / extracted.interior_sqm) * 100) / 100;
   }
 
-  // Region: locality first, then coordinates
-  const region =
-    lookupRegionByLocality(extracted.locality, extracted.canton, extracted.district, extracted.province) ??
-    lookupRegionByCoords(extracted.lat, extracted.lng);
-
-  // If the listing didn't include lat/lng but did include locality/canton/
-  // province, geocode via Mapbox to get coordinates + a confidence rating.
+  // Geocode FIRST (so we have lat/lng for region fallback), THEN map region.
   let lat = extracted.lat ?? null;
   let lng = extracted.lng ?? null;
   let geocodeConfidence: NormalizedListing['geocode_confidence'] =
@@ -198,6 +248,13 @@ export async function normalize(
       geocodeConfidence = g.confidence;
     }
   }
+
+  // Region: locality first, then post-geocode coordinates (NOT pre-geocode).
+  // Earlier bug: this was reading extracted.lat/lng which is null for most
+  // listings; the geocoded coordinates were only used for distance computation.
+  const region =
+    lookupRegionByLocality(extracted.locality, extracted.canton, extracted.district, extracted.province) ??
+    lookupRegionByCoords(lat, lng);
 
   // Slug
   const slugBase = opts.slugSuffix
