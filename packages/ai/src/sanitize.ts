@@ -55,9 +55,24 @@ const TRAIL_NOISE = [
   / \| Costa Rica$/i,
   / - Costa Rica$/i,
   / · Costa Rica$/i,
-  / in Costa Rica$/i,    // only when at the very end
+  / in Costa Rica$/i,         // only when at the very end
+  /, ?Costa Rica$/i,          // ", Costa Rica" tail
+  / - [A-Z][a-zA-Z ]+, Costa Rica$/i,  // " - Tamarindo, Costa Rica" tail (city, country)
   /Search.*\.\.\. ?/i,
+  // Price tail: " - $329,000" / " - USD 350,000" — keep the structural title
+  / - \$[\d,]+(?:\.\d+)?(?:\s*-.*)?$/,
+  / - USD ?[\d,]+(?:\.\d+)?(?:\s*-.*)?$/i,
+  / - CRC ?[\d,]+(?:\.\d+)?(?:\s*-.*)?$/i,
+  // " : N" counter suffix that some sites append (e.g. " : 3" = third in list)
+  / : \d+$/,
+  // "For Sale - " prefix when it's redundant with the listing context
+  /^For Sale - /i,
 ];
+
+// Pipe-separated noise tokens that Encuentra24 puts BEFORE the actual title:
+//   "Houses in Lindora | For Sale | House for sale in Lindora Santa Ana"
+// We want just the last meaningful chunk.
+const PIPE_NOISE_PREFIX = /^(Houses?|Condos?|Apartments?|Lots?|Properties|Real Estate|Homes?|Land)\b[^|]*\| For Sale \| /i;
 
 /**
  * Clean a raw title. Decodes entities, strips trailing brand noise,
@@ -67,8 +82,15 @@ const TRAIL_NOISE = [
 export function cleanTitle(raw: string | null | undefined): string | null {
   if (!raw) return null;
   let s = decodeEntities(raw).trim();
-  for (const re of TRAIL_NOISE) {
-    s = s.replace(re, '').trim();
+  // Strip Encuentra24-style leading category pipe-noise first
+  s = s.replace(PIPE_NOISE_PREFIX, '').trim();
+  // Multiple-pass trail cleanup — some titles have two noise tails stacked
+  for (let i = 0; i < 3; i++) {
+    const before = s;
+    for (const re of TRAIL_NOISE) {
+      s = s.replace(re, '').trim();
+    }
+    if (s === before) break;
   }
   s = s.replace(/\s+/g, ' ').replace(/^[\s\-|·]+|[\s\-|·]+$/g, '').trim();
   if (s.length < 3) return null;

@@ -58,8 +58,10 @@ export function safeParse(
   try {
     const json = tryParseJson<Record<string, unknown>>(text);
     // Apply breadcrumb-derived location if AI missed it
-    const enriched = applyBreadcrumbsFallback(json, raw.breadcrumbs);
-    return ExtractedListing.parse(enriched);
+    const withBc = applyBreadcrumbsFallback(json, raw.breadcrumbs);
+    // Apply title backstop: if AI returned null/empty but adapter captured one, use it
+    const withTitle = applyTitleBackstop(withBc, raw);
+    return ExtractedListing.parse(withTitle);
   } catch (e) {
     logger.warn(
       { err: (e as Error).message, snippet: text.slice(0, 200) },
@@ -67,6 +69,27 @@ export function safeParse(
     );
     return salvageFromRaw(raw);
   }
+}
+
+/**
+ * Backstop: if AI returned null/empty for title but the adapter captured one
+ * (via og:title or <title>), use the adapter's value. The sanitizer in
+ * normalize.ts will then strip brand-noise tails.
+ *
+ * Encuentra24 / RPM / cr-dream-makers / coldwell all populate raw_extracted.title;
+ * AI sometimes "forgets" to copy it through to the structured output.
+ */
+function applyTitleBackstop(obj: Record<string, unknown>, raw: RawListingPayload): Record<string, unknown> {
+  const titleNow = obj['title'];
+  if (typeof titleNow === 'string' && titleNow.trim().length > 0) return obj;
+  const re = (raw.raw_extracted ?? {}) as Record<string, unknown>;
+  const fromAdapter =
+    (typeof re['title'] === 'string' && (re['title'] as string).trim()) ||
+    (typeof (re['og'] as Record<string, unknown> | undefined)?.['og:title'] === 'string' &&
+      ((re['og'] as Record<string, unknown>)['og:title'] as string).trim()) ||
+    null;
+  if (fromAdapter) return { ...obj, title: fromAdapter };
+  return obj;
 }
 
 /** Backstop: if AI returned null for province/canton/locality but breadcrumbs are present, fill them in. */
