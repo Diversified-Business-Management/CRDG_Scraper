@@ -151,6 +151,29 @@ export const ExtractedListing = z.object({
     bathrooms: z.number().nullable().optional(),
   }))).default([]),
 
+  // Room-specific feature categories (RESO-style)
+  bedroom_features: z.preprocess(v => (Array.isArray(v) ? v : []), z.array(z.string())).default([]),
+  dining_room_features: z.preprocess(v => (Array.isArray(v) ? v : []), z.array(z.string())).default([]),
+  family_room_features: z.preprocess(v => (Array.isArray(v) ? v : []), z.array(z.string())).default([]),
+  kitchen_features: z.preprocess(v => (Array.isArray(v) ? v : []), z.array(z.string())).default([]),
+  laundry_features: z.preprocess(v => (Array.isArray(v) ? v : []), z.array(z.string())).default([]),
+  fireplaces_count: z.number().int().nullable().optional(),
+  fireplace_features: z.preprocess(v => (Array.isArray(v) ? v : []), z.array(z.string())).default([]),
+  property_subtype: z.string().nullable().optional(),  // e.g., "Single Family Residence"
+  foundation: z.preprocess(v => (Array.isArray(v) ? v : []), z.array(z.string())).default([]),
+  roof: z.preprocess(v => (Array.isArray(v) ? v : []), z.array(z.string())).default([]),
+  new_construction_yn: z.boolean().nullable().optional(),
+  total_structure_area_sqm: z.number().nullable().optional(),
+
+  // Utility / amenity yes-no + types
+  pool_yn: z.boolean().nullable().optional(),
+  jacuzzi_yn: z.boolean().nullable().optional(),
+  parking_yn: z.boolean().nullable().optional(),
+  telephone_yn: z.boolean().nullable().optional(),
+  internet_types: z.preprocess(v => (Array.isArray(v) ? v : []), z.array(z.string())).default([]),
+  television_types: z.preprocess(v => (Array.isArray(v) ? v : []), z.array(z.string())).default([]),
+  ac_types: z.preprocess(v => (Array.isArray(v) ? v : []), z.array(z.string())).default([]),
+
   // Catch-all
   notes: z.string().nullable().optional(),
   extra_data: z.preprocess(v => (v && typeof v === 'object' && !Array.isArray(v) ? v : {}), z.record(z.string(), z.unknown())).default({}),

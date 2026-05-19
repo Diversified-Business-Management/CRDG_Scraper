@@ -3,6 +3,7 @@ import { RoleGate } from '@/components/RoleGate';
 
 const NAV = [
   { href: '/admin', label: 'Overview' },
+  { href: '/admin/data-grid', label: 'Data grid' },
   { href: '/admin/sources', label: 'Sources' },
   { href: '/admin/runs', label: 'Runs' },
   { href: '/admin/dedup', label: 'Dedup queue' },

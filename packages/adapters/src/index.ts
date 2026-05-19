@@ -9,6 +9,18 @@ import point2homesCr from './point2homes-cr.js';
 import mlscr from './mlscr.js';
 import coldwellBankerCr from './coldwell-banker-cr.js';
 import developersGeneric from './developers-generic.js';
+import {
+  ALL_GENERIC,
+  realtorComCr,
+  reCr,
+  coldwellCbTamarindo,
+  propertiesInCr,
+  sothebysCr,
+  dominicalRealty,
+  twoCrRealEstate,
+  crDreamMakers,
+  rpmRealEstateCr,
+} from './generic-real-estate.js';
 
 export const ALL_ADAPTERS: SourceAdapter[] = [
   encuentra24,
@@ -16,6 +28,7 @@ export const ALL_ADAPTERS: SourceAdapter[] = [
   mlscr,
   coldwellBankerCr,
   developersGeneric,
+  ...ALL_GENERIC,
 ];
 
 const BY_SLUG: Map<string, SourceAdapter> = new Map(ALL_ADAPTERS.map((a) => [a.slug, a]));
@@ -24,7 +37,11 @@ export function getAdapter(slug: string): SourceAdapter | undefined {
   return BY_SLUG.get(slug);
 }
 
-export { encuentra24, point2homesCr, mlscr, coldwellBankerCr, developersGeneric };
+export {
+  encuentra24, point2homesCr, mlscr, coldwellBankerCr, developersGeneric,
+  realtorComCr, reCr, coldwellCbTamarindo, propertiesInCr,
+  sothebysCr, dominicalRealty, twoCrRealEstate, crDreamMakers, rpmRealEstateCr,
+};
 
 // Re-export utilities consumers may want to compose with.
 export { fetchHtml, USER_AGENT } from './util/http.js';

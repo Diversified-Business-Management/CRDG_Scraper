@@ -83,6 +83,80 @@ export interface CanonicalListingRow {
   wp_synced_at: string | null;
   created_at: string;
   updated_at: string;
+  // 95-field expansion
+  distance_to_beach_km: number | null;
+  distance_to_airport_km: number | null;
+  nearest_airport_code: string | null;
+  distance_to_hospital_km: number | null;
+  nearest_hospital_name: string | null;
+  distance_to_school_km: number | null;
+  nearest_school_name: string | null;
+  distance_to_grocery_km: number | null;
+  community_name: string | null;
+  building_name: string | null;
+  gated_community: boolean | null;
+  view_types: string[] | null;
+  pool_features: string[] | null;
+  interior_features: string[] | null;
+  exterior_features: string[] | null;
+  parking_features: string[] | null;
+  appliances: string[] | null;
+  flooring: string[] | null;
+  cooling: string[] | null;
+  heating: string[] | null;
+  furnishings_included: string | null;
+  title_status: string | null;
+  road_access: string | null;
+  water_source: string | null;
+  electricity: string | null;
+  internet_quality: string | null;
+  zoning: string | null;
+  listing_agent_name: string | null;
+  listing_agent_phone: string | null;
+  listing_agent_email: string | null;
+  source_brokerage: string | null;
+  source_brokerage_phone: string | null;
+  primary_source_url: string | null;
+  virtual_tour_url: string | null;
+  video_url: string | null;
+  photo_count: number | null;
+  notes: string | null;
+  bathrooms_full: number | null;
+  bathrooms_half: number | null;
+  bathrooms_total: number | null;
+  realtor_review_status: string | null;
+  // Categories
+  categories: string[] | null;
+  // Utility / amenity yes-no + types
+  pool_yn: boolean | null;
+  jacuzzi_yn: boolean | null;
+  parking_yn: boolean | null;
+  telephone_yn: boolean | null;
+  internet_types: string[] | null;
+  television_types: string[] | null;
+  ac_types: string[] | null;
+  // Construction & condition
+  stories_total: number | null;
+  floor_number: number | null;
+  total_floors_in_bldg: number | null;
+  parking_spaces: number | null;
+  garage_spaces: number | null;
+  architectural_style: string | null;
+  condition: string | null;
+  construction_status: string | null;
+  // Room-specific feature categories
+  bedroom_features: string[] | null;
+  dining_room_features: string[] | null;
+  family_room_features: string[] | null;
+  kitchen_features: string[] | null;
+  laundry_features: string[] | null;
+  fireplaces_count: number | null;
+  fireplace_features: string[] | null;
+  property_subtype: string | null;
+  foundation: string[] | null;
+  roof: string[] | null;
+  new_construction_yn: boolean | null;
+  total_structure_area_sqm: number | null;
 }
 
 export interface PhotoRow {

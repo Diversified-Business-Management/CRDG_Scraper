@@ -1,5 +1,6 @@
 import { getPgPool, logger, type EnrichedListing, type RawPhoto } from '@crdg/core';
 import type { DedupeResult } from './dedupe.js';
+import { validatePhotosWithVision } from './photo-validate.js';
 
 export interface PublishResult {
   canonical_listing_id: string;
@@ -79,13 +80,39 @@ export async function publish(
       [canonicalId, rawListingId, dedupeResult.confidence, dedupeResult.method],
     );
 
-    // Photo filter — reject obvious junk before insert (logos, sprites, footers, tiny images)
+    // Photo filter — two passes:
+    //   1) URL/dimension classifier (free, deterministic) catches obvious junk.
+    //   2) AI vision validation on remaining photos confirms each is a real
+    //      property image; rejects anything else (MLS branding the URL filter
+    //      misses, agent headshots, map screenshots, etc.).
     photos = photos.map(p => {
-      const annotated = p as RawPhoto & { reject_reason?: string };
-      const r = classifyPhoto(p);
+      // Rewrite WordPress thumbnail URLs (e.g. "casa-pool-525x328.jpeg" → "casa-pool.jpeg")
+      const rewritten = rewriteWpThumb(p.url);
+      const annotated: RawPhoto & { reject_reason?: string } = { ...p, url: rewritten };
+      const r = classifyPhoto(annotated);
       if (r) annotated.reject_reason = r;
       return annotated;
     });
+
+    // Run AI vision validation on the photos that survived stage 1.
+    const candidates = photos.filter(p => !(p as RawPhoto & { reject_reason?: string }).reject_reason);
+    if (candidates.length > 0) {
+      try {
+        const validation = await validatePhotosWithVision(candidates);
+        let i = 0;
+        for (const p of photos) {
+          const annotated = p as RawPhoto & { reject_reason?: string };
+          if (annotated.reject_reason) continue;
+          const verdict = validation.verdicts[i++];
+          if (verdict?.verdict === 'reject') {
+            annotated.reject_reason = `vision:${verdict.reason.slice(0, 60)}`;
+          }
+        }
+        logger.info({ rawListingId, candidates: candidates.length, vision_rejected: validation.verdicts.filter(v => v?.verdict === 'reject').length, costUsd: Number(validation.costUsd.toFixed(4)) }, 'photo.vision.done');
+      } catch (e) {
+        logger.warn({ err: (e as Error).message }, 'photo.vision.failed');
+      }
+    }
 
     // Photos: insert non-rejected, non-duplicate URLs
     if (photos.length) {
@@ -264,6 +291,33 @@ function buildCanonicalRow(e: EnrichedListing & { primary_source_url?: string | 
     // Catch-all
     ['notes', e.notes ?? null, 'coalesce'],
     ['extra_data', JSON.stringify(e.extra_data ?? {}), 'overwrite'],
+
+    // Utility / amenity yes-no + types
+    ['pool_yn', e.pool_yn ?? null, 'coalesce'],
+    ['jacuzzi_yn', e.jacuzzi_yn ?? null, 'coalesce'],
+    ['parking_yn', e.parking_yn ?? null, 'coalesce'],
+    ['telephone_yn', e.telephone_yn ?? null, 'coalesce'],
+    ['internet_types', e.internet_types ?? [], 'overwrite'],
+    ['television_types', e.television_types ?? [], 'overwrite'],
+    ['ac_types', e.ac_types ?? [], 'overwrite'],
+
+    // Categories — derived in SQL via derive_listing_categories(); sent here as a placeholder array
+    // so the row has the column. Trigger or post-update can recompute if needed.
+    ['categories', deriveCategoriesSync(e), 'overwrite'],
+
+    // Room-specific features
+    ['bedroom_features', e.bedroom_features ?? [], 'overwrite'],
+    ['dining_room_features', e.dining_room_features ?? [], 'overwrite'],
+    ['family_room_features', e.family_room_features ?? [], 'overwrite'],
+    ['kitchen_features', e.kitchen_features ?? [], 'overwrite'],
+    ['laundry_features', e.laundry_features ?? [], 'overwrite'],
+    ['fireplaces_count', e.fireplaces_count ?? null, 'coalesce'],
+    ['fireplace_features', e.fireplace_features ?? [], 'overwrite'],
+    ['property_subtype', e.property_subtype ?? null, 'coalesce'],
+    ['foundation', e.foundation ?? [], 'overwrite'],
+    ['roof', e.roof ?? [], 'overwrite'],
+    ['new_construction_yn', e.new_construction_yn ?? null, 'coalesce'],
+    ['total_structure_area_sqm', e.total_structure_area_sqm ?? null, 'coalesce'],
   ];
 
   // For INSERT: all columns
@@ -282,17 +336,58 @@ function buildCanonicalRow(e: EnrichedListing & { primary_source_url?: string | 
   return { insert, merge };
 }
 
+/** Compute the cross-cutting categories array for a listing. Mirrors the SQL function. */
+function deriveCategoriesSync(e: EnrichedListing): string[] {
+  const cats: string[] = [];
+  if (e.property_type === 'house' || e.property_type === 'farm') cats.push('homes-and-villas');
+  if (e.property_type === 'condo') cats.push('condominiums');
+  if (e.property_type === 'lot') cats.push('lots');
+  const features = e.features ?? [];
+  const tags = e.tags_ai ?? [];
+  if ((e.distance_to_beach_km != null && e.distance_to_beach_km <= 5)
+      || features.includes('beachfront') || features.includes('oceanfront') || features.includes('walk_to_beach')
+      || tags.includes('beachfront')) {
+    cats.push('beach-properties');
+  }
+  if ((e.price_usd != null && e.price_usd >= 1_000_000) || tags.includes('luxury')) {
+    cats.push('luxury-properties');
+  }
+  return cats;
+}
+
 /** URL + dimension classifier. Returns reject_reason if photo is junk. */
 function classifyPhoto(p: RawPhoto): string | null {
   const url = p.url.toLowerCase();
-  if (/\b(footer|logo|sprite|icon|badge|banner|placeholder|watermark|favicon|avatar)\b/.test(url)) return 'logo_or_branding';
-  if (/casas24|carros24|encuentra24[-_]badge|google[-_]play|app[-_]store/.test(url)) return 'site_branding';
+  // Extract just the filename (after last /, before any query) for stricter matching
+  const filename = url.split('?')[0]?.split('/').pop() ?? url;
+  // Generic branding/UI noise
+  if (/\b(footer|logo|sprite|icon|badge|banner|placeholder|watermark|favicon|avatar|verified|verified[%_]?badge)\b/.test(url)) return 'logo_or_branding';
+  // App-store download badges (Huawei AppGallery, Google Play, iOS App Store)
+  if (/badgehuawei|appgal|appgallery|app[-_]?gallery|google[-_]?play|app[-_]?store|huawei[-_]?gallery/.test(url)) return 'app_store_badge';
+  // Source-site self-branding (Encuentra24 / Casas24 / Carros24 / MLS.cr / Coldwell)
+  if (/casas24|carros24|encuentra24[-_]?badge|e24[-_]?badge|arrios/.test(url)) return 'site_branding';
+  // MLS.cr brand artwork — any filename containing "mls" with .png/.jpg/.webp
+  if (/^mls[-_.][\w.-]*\.(png|jpe?g|webp|svg)$/i.test(filename)) return 'site_branding';
+  if (/mls\.cr[-_.][\w.-]*\.(png|jpe?g|webp|svg)/.test(url)) return 'site_branding';
+  // Coldwell Banker logo / CB-* branded artwork
+  if (/coldwell[-_]banker[-_]logo|\bcb[-_](logo|brand)|coldwell.*logo/.test(url)) return 'site_branding';
+  // Common WordPress branding asset paths
+  if (/wp-content\/uploads\/\d{4}\/\d{2}\/(logo|banner|hero|brand)/.test(url)) return 'site_branding';
+  // Vector / animated formats are virtually always icons
   if (/\.(svg|gif)(\?|$)/.test(url)) return 'icon';
-  // Tiny images are usually icons. Only reject if dimensions are present and small.
+  // Tiny images are usually icons or thumbnails — reject when dims are known and small
   if (p.width != null && p.height != null) {
     if (p.width < 300 || p.height < 200) return 'tiny';
     const ar = p.width / p.height;
     if (ar < 0.4 || ar > 4) return 'unusual_aspect_ratio';
   }
+  // WordPress thumbnail derivative (filename ends with -WxH right before extension)
+  // These are LEGITIMATE photos but at thumbnail size; we prefer the original — but
+  // if we don't have it, accept this and let the dashboard resize. Don't reject.
   return null;
+}
+
+/** Return the original-sized URL for WordPress thumbnail derivatives ("foo-1024x768.jpg" → "foo.jpg"). */
+function rewriteWpThumb(url: string): string {
+  return url.replace(/-(\d+)x(\d+)(\.[a-z]+)(\?[^"']*)?$/i, '$3$4');
 }

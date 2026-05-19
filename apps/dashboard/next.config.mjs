@@ -21,7 +21,10 @@ const nextConfig = {
       { protocol: 'https', hostname: '**.reservaconchal.com' },
       { protocol: 'https', hostname: '**' }, // permissive in dev — listings come from many partner sites
     ],
-    unoptimized: true, // bypass /_next/image proxy entirely (avoids domain whitelist drift)
+    // Use Next/Image optimizer so we resize at the proxy layer (better UX, lower bandwidth).
+    formats: ['image/webp'],
+    deviceSizes: [320, 640, 768, 1024, 1280, 1600],
+    imageSizes: [64, 128, 256, 384, 512],
   },
   experimental: {
     typedRoutes: false,

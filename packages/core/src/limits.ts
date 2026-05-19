@@ -13,10 +13,10 @@ export const Limits = {
     autoPause5xxRate: 0.10,
   },
   ai: {
-    // Keep low — Anthropic free-tier accounts typically have 50K input tokens/min
-    // and each listing's extract uses ~15-20K input tokens. 1 concurrent
-    // means ~3-4 calls/min sustained, well under cap.
-    maxConcurrent: 1,
+    // 2 concurrent — Anthropic 50K input tokens/min cap with ~12K tokens/call
+    // gives us headroom for 4-6 calls/min. Two concurrent doubles throughput
+    // versus serial without risking sustained rate-limit pressure.
+    maxConcurrent: 2,
     perCallTimeoutMs: 60_000,
   },
   photos: {

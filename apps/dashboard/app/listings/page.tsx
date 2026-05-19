@@ -53,6 +53,10 @@ export default async function ListingsPage({
   if (sp.region) {
     query = query.in('region_slug', sp.region.split(',').filter(Boolean));
   }
+  if ((sp as { category?: string }).category) {
+    const cats = (sp as { category?: string }).category!.split(',').filter(Boolean);
+    if (cats.length) query = query.overlaps('categories', cats);
+  }
   if (sp.type) {
     query = query.in('property_type', sp.type.split(',').filter(Boolean));
   }

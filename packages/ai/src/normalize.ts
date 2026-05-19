@@ -7,6 +7,7 @@ import {
   logger,
 } from '@crdg/core';
 import { computeDistances } from './distance.js';
+import { geocodeCRAddress } from './geocode.js';
 
 /**
  * Curated locality → CRDG region map. Lowercase, accent-stripped keys.
@@ -176,9 +177,26 @@ export async function normalize(
     lookupRegionByLocality(extracted.locality, extracted.canton, extracted.district, extracted.province) ??
     lookupRegionByCoords(extracted.lat, extracted.lng);
 
-  // Geocode confidence — we skip Mapbox in v1.
-  const geocodeConfidence: NormalizedListing['geocode_confidence'] =
-    extracted.lat != null && extracted.lng != null ? 'exact' : null;
+  // If the listing didn't include lat/lng but did include locality/canton/
+  // province, geocode via Mapbox to get coordinates + a confidence rating.
+  let lat = extracted.lat ?? null;
+  let lng = extracted.lng ?? null;
+  let geocodeConfidence: NormalizedListing['geocode_confidence'] =
+    lat != null && lng != null ? 'exact' : null;
+  if (lat == null || lng == null) {
+    const g = await geocodeCRAddress({
+      address_line: extracted.address_line,
+      locality: extracted.locality,
+      district: extracted.district,
+      canton: extracted.canton,
+      province: extracted.province,
+    });
+    if (g) {
+      lat = g.lat;
+      lng = g.lng;
+      geocodeConfidence = g.confidence;
+    }
+  }
 
   // Slug
   const slugBase = opts.slugSuffix
@@ -190,13 +208,15 @@ export async function normalize(
   const taxesUsd = await maybeToUsd(extracted.taxes_annual, extracted.price_currency);
   const originalListUsd = await maybeToUsd(extracted.list_price_original, extracted.price_currency);
 
-  // Distances — only meaningful when we have explicit coordinates inside CR.
+  // Distances — only meaningful when we have coordinates (extracted or geocoded) inside CR.
   const distances = await computeDistances(
-    extracted.lat != null && extracted.lng != null ? { lat: extracted.lat, lng: extracted.lng } : null,
+    lat != null && lng != null ? { lat, lng } : null,
   );
 
   return {
     ...extracted,
+    lat,
+    lng,
     price_usd: priceUsd,
     price_per_sqm: pricePerSqm,
     hoa_fee_usd: hoaUsd,

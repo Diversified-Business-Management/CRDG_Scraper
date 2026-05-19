@@ -18,6 +18,14 @@ const REGIONS: Array<{ slug: string; label: string }> = [
 
 const PROPERTY_TYPES = ['house', 'condo', 'lot', 'farm', 'commercial', 'hotel', 'other'];
 
+const CATEGORIES: Array<{ slug: string; label: string }> = [
+  { slug: 'homes-and-villas', label: 'Homes and Villas' },
+  { slug: 'condominiums', label: 'Condominiums' },
+  { slug: 'lots', label: 'Lots' },
+  { slug: 'beach-properties', label: 'Beach Properties' },
+  { slug: 'luxury-properties', label: 'Luxury Properties' },
+];
+
 export function FilterSidebar() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -102,6 +110,19 @@ export function FilterSidebar() {
           className="pl-8"
         />
       </form>
+
+      <FilterSection label="Category">
+        <div className="space-y-1">
+          {CATEGORIES.map((c) => (
+            <Checkbox
+              key={c.slug}
+              label={c.label}
+              checked={isActive('category', c.slug)}
+              onChange={() => toggleMulti('category', c.slug)}
+            />
+          ))}
+        </div>
+      </FilterSection>
 
       <FilterSection label="Region">
         <div className="space-y-1">

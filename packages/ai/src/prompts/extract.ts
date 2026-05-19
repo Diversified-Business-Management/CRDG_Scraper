@@ -54,6 +54,31 @@ MEDIA
 - virtual_tour_url, video_url, floorplan_url — extract direct URLs if present.
 - floorplans: array of {url, label, sqm, bedrooms, bathrooms} for multi-unit projects.
 
+ROOM-SPECIFIC FEATURES (RESO-style; only populate when explicit in source)
+- bedroom_features: e.g. ["walk_in_closet", "ground_floor_bedroom", "ensuite"]
+- dining_room_features: e.g. ["formal_dining_room", "breakfast_nook"]
+- family_room_features: e.g. ["separate_family_room"]
+- kitchen_features: e.g. ["countertop_granite", "skylights", "island", "pantry", "breakfast_bar"]
+- laundry_features: e.g. ["inside", "in_unit", "shared", "hookups_only"]
+- fireplaces_count: integer count
+- fireplace_features: e.g. ["family_room", "living_room", "wood_burning", "gas"]
+
+CONSTRUCTION DETAIL
+- property_subtype: free-text RESO subtype (e.g., "Single Family Residence", "Townhouse", "Condo Hotel", "Lot/Land", "Multi-family")
+- foundation: e.g. ["concrete_perimeter", "slab", "pier"]
+- roof: e.g. ["composition", "shingle", "tile", "metal", "thatched"]
+- new_construction_yn: true if explicitly new; false if existing/used; null if unclear
+- total_structure_area_sqm: total enclosed area including garage/patio (m²); distinct from interior_sqm (conditioned living only)
+
+UTILITY / AMENITY YES-NO (booleans + types)
+- pool_yn: true if any pool (private or communal); false if explicitly no; null if unstated.
+- jacuzzi_yn: true if jacuzzi/hot tub; false if explicitly none.
+- parking_yn: true if any parking (covered, uncovered, garage, carport, street); false if explicitly none.
+- telephone_yn: true if landline / phone available.
+- internet_types: e.g. ["fiber"], ["cable","dsl"], ["satellite"]. Multiple OK; lowercase.
+- television_types: e.g. ["cable_tv"], ["satellite_tv"], ["smart_tv"], ["streaming_only"].
+- ac_types: e.g. ["wall_unit"], ["central"], ["split","mini_split"], ["none"]. (Distinct from cooling[] which can include fans/etc.)
+
 CATCH-ALL
 - notes: a short free-text note for anything important that doesn't fit a structured field (e.g. "Owner financing available", "Recently restored", "Rented through Dec 2026").
 - extra_data: dictionary of any other facts you found that don't fit elsewhere. Use whatever keys make sense (e.g. {"hoa_pet_policy": "max 1 dog", "septic_age_yrs": 5}).
