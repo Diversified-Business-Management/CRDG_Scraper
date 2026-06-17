@@ -1,0 +1,67 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222 14% 18%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 14% 18%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 14% 18%;
+    --primary: 215 25% 27%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 24% 96%;
+    --secondary-foreground: 222 14% 18%;
+    --muted: 210 24% 96%;
+    --muted-foreground: 215 13% 45%;
+    --accent: 38 92% 50%;
+    --accent-foreground: 222 14% 12%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 215 16% 90%;
+    --input: 215 16% 90%;
+    --ring: 38 92% 50%;
+    --radius: 0.75rem;
+  }
+
+  .dark {
+    --background: 222 18% 8%;
+    --foreground: 210 30% 95%;
+    --card: 222 18% 11%;
+    --card-foreground: 210 30% 95%;
+    --popover: 222 18% 11%;
+    --popover-foreground: 210 30% 95%;
+    --primary: 210 40% 92%;
+    --primary-foreground: 222 18% 11%;
+    --secondary: 222 14% 16%;
+    --secondary-foreground: 210 30% 95%;
+    --muted: 222 14% 16%;
+    --muted-foreground: 215 16% 65%;
+    --accent: 38 92% 55%;
+    --accent-foreground: 222 18% 8%;
+    --destructive: 0 65% 50%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 222 14% 18%;
+    --input: 222 14% 18%;
+    --ring: 38 92% 55%;
+  }
+
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+  ::selection {
+    background: hsl(var(--accent) / 0.3);
+  }
+}
+
+@layer components {
+  .crdg-card {
+    @apply rounded-xl border bg-card text-card-foreground shadow-sm;
+  }
+}
